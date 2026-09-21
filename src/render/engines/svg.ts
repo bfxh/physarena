@@ -21,9 +21,20 @@ export const meta: RenderEngineMeta = {
   costKb: 0,
 };
 
-/** DOM nodes are ~100x more expensive than triangles; the budget is tiny. */
-const TRI_BUDGET = 1400;
-const INSTANCE_BUDGET = 120;
+/**
+ * DOM budgets, and they are deliberately severe.
+ *
+ * The first cut of this backend used 1400 triangles and re-serialised the whole
+ * <svg> every frame. At 60 Hz that is megabytes per second of HTML parsing, and
+ * it hard-locked the page - a real bug found by pixel-testing this backend in
+ * isolation. Two things fix it: a much smaller budget, and an update throttle.
+ * A DOM backend that renders at 15 fps and stays responsive beats one that
+ * nominally renders at 60 and freezes the tab.
+ */
+const TRI_BUDGET = 360;
+const INSTANCE_BUDGET = 48;
+/** Rebuild the SVG every Nth frame (~15 fps at 60 Hz). */
+const UPDATE_EVERY = 4;
 
 const SKY: Vec3 = [1, 1, 1];
 const GROUND: Vec3 = [0.7216, 0.7529, 0.8];
@@ -193,6 +204,9 @@ export class SvgRenderEngine implements IRenderEngine {
   private lastTriangles = 0;
   private lastInstances = 0;
   private lastDropped = 0;
+  private frameCounter = 0;
+  /** Set on init / resize / scene change so the next render is never skipped. */
+  private forceNext = true;
 
   onResize: () => void = () => {};
   onContextLost: (() => void) | null = null;
@@ -260,6 +274,9 @@ export class SvgRenderEngine implements IRenderEngine {
 
   render(slots: RenderSlot[]) {
     if (this.disposed) return;
+    this.frameCounter++;
+    if (!this.forceNext && this.frameCounter % UPDATE_EVERY !== 0) return;
+    this.forceNext = false;
     const w = this.host.clientWidth || 1;
     const h = this.host.clientHeight || 1;
     const n = Math.max(1, slots.length);

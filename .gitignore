@@ -5,3 +5,7 @@ wasm-bridge/target/
 __pycache__/
 .DS_Store
 Thumbs.db
+# scratch files from local verification (health checks, one-off probes)
+t.html
+_*.png
+_c-*.png

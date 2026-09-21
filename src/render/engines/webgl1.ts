@@ -12,7 +12,7 @@ export const meta: RenderEngineMeta = {
   id: 'webgl1',
   name: '原生 WebGL1',
   language: 'GLSL',
-  backend: 'WebGL2',
+  backend: 'WebGL1',
   license: 'MIT',
   homepage: 'https://www.khronos.org/webgl/',
   accent: '#c98a3c',

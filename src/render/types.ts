@@ -13,7 +13,7 @@ import type { BodyDesc, BodyState, Vec3 } from '../core/types';
  */
 
 export type RenderLanguage = 'TypeScript' | 'JavaScript' | 'GLSL' | 'WGSL' | 'Rust' | 'C++';
-export type RenderBackend = 'WebGL2' | 'WebGPU' | 'Canvas2D' | 'Software';
+export type RenderBackend = 'WebGL2' | 'WebGL1' | 'WebGPU' | 'Canvas2D' | 'Software';
 
 export interface RenderFeatures {
   /** Can draw N copies of one mesh in a single call. */

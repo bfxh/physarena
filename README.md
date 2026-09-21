@@ -111,22 +111,38 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 
 ---
 
-## 4 个渲染引擎
+## 10 个渲染引擎
 
-渲染后端本身也是被比较的对象。同一个物理世界，四种画法：
+渲染后端本身也是被比较的对象。同一个物理世界，十种画法：
 
-| 渲染器 | 语言 | 后端 | 许可 | chunk（gzip） | 特点 |
+| 渲染器 | 语言 | 后端 | 许可 | chunk | 特点 |
 |---|---|---|---|---|---|
-| **three.js** | JavaScript | WebGL2 | MIT | 92 KB | 最主流的 WebGL 封装，`InstancedMesh` + Lambert，作为对照基线 |
-| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 1343 KB | 功能最全的框架，thin instance + 内置相机 / 材质 / 多视口 |
-| **原生 WebGL2** | GLSL | WebGL2 | MIT | 6 KB | 不经框架：手写 mat4、顶点属性分频、自己管 VAO 与实例缓冲 |
-| **Canvas2D 软件投影** | TypeScript | Canvas2D | MIT | 5.7 KB | 完全不用 GPU：CPU 投影 + 世界空间背面剔除 + 画家算法 |
+| **three.js** | JavaScript | WebGL2 | MIT | 372 KB | 最主流的 WebGL 封装，`InstancedMesh` + Lambert |
+| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 5922 KB | 功能最全的框架，thin instance + 内置相机 / 材质 / 多视口 |
+| **原生 WebGPU** | WGSL | WebGPU | MIT | 13 KB | 下一代 API：显式管线状态、WGSL、命令编码器 |
+| **原生 WebGL2** | GLSL | WebGL2 | MIT | 15 KB | 手写 mat4、顶点属性分频、自己管 VAO 与实例缓冲 |
+| **原生 WebGL1** | GLSL | WebGL1 | MIT | 12 KB | 上一代 API：GLSL 100、无 VAO、实例化靠 ANGLE 扩展 |
+| **点云** | GLSL | WebGL2 | MIT | 9 KB | 每个刚体一个顶点，一次 `drawArrays` 画完整个场景 |
+| **线框** | GLSL | WebGL2 | MIT | 9 KB | 去重后的边，顶点吞吐翻三倍、像素填充降到几乎为零 |
+| **Canvas2D 软件投影** | TypeScript | Canvas2D | MIT | 13 KB | 完全不用 GPU：CPU 投影 + 背面剔除 + 画家算法 |
+| **SVG 多边形** | TypeScript | Software | MIT | 8 KB | 每个三角形一个 `<polygon>` 元素，DOM 后端的下限 |
+| **CSS 3D 合成** | TypeScript | Software | MIT | 7 KB | 每个刚体一个 `div`，透视与排序交给浏览器合成器 |
 
-三点值得说明：
+**框架税一目了然**：Babylon 5922 KB、three 372 KB，而八个手写后端全部在 7–15 KB。全部是懒加载 chunk，选中哪个才下载哪个。
 
-![四个渲染后端](docs/renderer-matrix.png)
+**中间那六个后端不是凑数，每一个都在回答一个具体问题**：点云给出「保真度换速度」的上界；线框分离顶点吞吐与像素填充；WebGL1 量出 VAO 和核心实例化省掉了多少；SVG 与 CSS 3D 探 DOM 后端的天花板；WebGPU 则是同一件事用显式管线再做一遍。
+
+![渲染后端对比](docs/renderer-matrix.png)
+
+四点值得说明：
 
 **几何是共享的。** 每个后端都消费同一份引擎无关的三角形数据（`src/render/geometry.ts`），所以换后端不会换网格——画面差异只可能来自管线本身。
+
+**相机是共享的。** 四个手写 GL 后端共用 `src/render/glCommon.ts` 里的同一份取景与轨道相机代码；框架后端的取景公式也逐系数对齐，实测同一场景下相机位置完全相同（`[7.03, 15.68, 8.72]`）。框架各自的相机约定不同（Babylon 的 `alpha` 从 +X 量起而非 +Z），照搬会得到镜像视角。
+
+**环境跑不了的会说明原因，不会消失。** WebGPU 在没启用的浏览器里仍然出现在列表中，显示为禁用并附上原因——「你的浏览器跑不了这个」是关于环境的事实，不是一个不存在的渲染器。
+
+**软件光栅的两道守卫**：三角形预算（9000/帧）与实例预算（420），超限时降质量而不是掉帧。地面用「地平线填充 + 线段近平面裁剪」绘制——140 m 的平面在任何可用机位下都有角点落在相机背后，直接投影会整块消失。
 
 **相机是等价的。** 四个后端的取景公式逐系数对齐，实测同一场景下相机位置完全相同（`[7.03, 15.68, 8.72]`），实例数 61、三角形 732 也对得上。框架各自的相机约定不同（Babylon 的 `alpha` 从 +X 量起而非 +Z），照搬会得到镜像视角，这一点已在实现里处理。
 
@@ -347,9 +363,11 @@ src/
   render/
     types.ts       IRenderEngine / IRenderLayer / RenderStats，与物理侧一一对应
     geometry.ts    引擎无关的三角形数据 + 形状签名 + 配色（所有后端共用）
-    registry.ts    4 个渲染后端的元数据 + 懒加载器
+    glCommon.ts    矩阵 / 着色器 / 轨道相机 / 地面网格，四个手写 GL 后端共用
+    registry.ts    10 个渲染后端的元数据 + 懒加载 + 可用性探测
     layout.ts      分屏栅格，GPU scissor 矩形与 DOM 标签共用
-    engines/       three / babylon / webgl2 / canvas2d 四个实现
+    engines/       three · babylon · webgpu · webgl2 · webgl1 · points
+                   wireframe · canvas2d · svg · css3d
   scenarios/       48 个场景，按分组拆分（含「破坏与流体」）
   ui/
     app.ts         三模式外壳、槽位管理、HUD、跑分面板、指标面板
@@ -457,6 +475,17 @@ interface IPhysicsEngine {
 | 拖入文件名走 `innerHTML`（注入路径） | `showOverlay` 的 html sink | 插值转义 |
 | 取景：`big-world`（5000 m 外）相机 13 km 外、`tower` 只露顶部 | `contentRadius` 相对**世界原点**且不含 Y | 内容包围盒（含 Y、相对内容中心），相机目标指向内容中心 |
 | cannon 的相对质量全错 | 用固定 `0.125 m³` 经验体积算质量（盒/球质量比恒为 1.0，其它引擎 1.39） | 走 `密度 × 形状体积`（`mass-ratio` 场景的 87 万:1 前提才成立） |
+
+### 第三轮修复的真实缺陷（双轴改造）
+
+| 症状 | 根因 | 修法 |
+|---|---|---|
+| **Babylon 面板完全空白**（切过去只有背景色），但 `renderProbe()` 报出 2 个 mesh / 40 个 thin instance / 材质 ready，`stats()` 也报出正确的三角形数——数据全对、画面全空 | init 里的 `engine.runRenderLoop(() => {})`。Babylon 的 runRenderLoop 会启动**它自己的** rAF 循环，每帧 `beginFrame()` → 空回调 → `endFrame()`，而 `endFrame()` **会交换后缓冲**。于是它在本实验画完一帧之后，紧接着又提交了一个空帧 | 删掉那行——渲染循环由宿主驱动，`scene.render()` 自己会完成 begin/end frame |
+| **SVG 后端让整个标签页卡死**（切过去无响应，8 分钟不返回） | 每帧 `svg.innerHTML = parts.join('')`：24 刚体场景即约 138 KB 的 HTML 要重新解析，60 Hz 下是每秒数 MB 的解析量 | 双层节流：三角形预算 1400 → 360、实例预算 120 → 48，且每 4 帧才重建一次（约 15 fps）；首帧强制渲染不跳过 |
+| 并排对比下各后端 draw call 数差很多，看着像 bug | 三个 GL 后端按形状签名合批，`drawCalls` 是真实提交数；而 SVG / CSS 后端根本没有"绘制调用"这个概念 | 指标面板对缺少该概念的后端显示「—」加口径说明，绝不写 0 |
+| 宿主指标（视口 / 绘图缓冲）在 SVG 与 CSS 后端恒为「—」 | 指标只查 `document.querySelector('canvas')`，而这两个后端的绘制目标是 `<svg>` 和 `<div>` | 改查 `.pa-canvas`（三种元素类型都带这个类），并对没有独立绘图缓冲的后端说明原因 |
+
+**这一轮最值得记住的一条：数据对 ≠ 画面对。** Babylon 那次 `probe()` 全部正常——因为它读的是 CPU 侧数组，根本不经过 GPU。凡是渲染问题，最后一定要落到像素上验证：把 canvas `drawImage` 到临时 canvas 再 `getImageData` 稀疏采样，一眼就能拿到「100% 是背景色」这种决定性证据。这个检查现在是渲染器改动后的标准动作。
 | 其余：Bullet 世界/scratch 泄漏、PhysX actor/shape/材质不释放、Havok 体先释放后移出世界、meshFactory 缓存键丢字段、导入模型 NaN 顶点、`RollingWindow` 注释与实现不符 | 见 `FIXPLAN.md` 台账 | 逐项修正 |
 
 **回归验证**：自检矩阵 **19 探针 × 8 引擎，0 失败**（`out/selftest-final.json`）；
