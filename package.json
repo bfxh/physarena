@@ -19,6 +19,7 @@
     "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.27.1",
     "@babylonjs/havok": "^1.3.14",
     "@dimforge/rapier3d-compat": "^0.20.0",
     "ammojs-typed": "^1.0.6",

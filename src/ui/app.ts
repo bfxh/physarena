@@ -926,6 +926,7 @@ export class App {
     const el = clear(this.els.inspector);
     const slot = this.slot(this.activeIds()[0] ?? '');
     const meta: EngineMeta | undefined = slot?.entry.meta;
+    const sim = slot?.sim ?? null;
 
     el.append(
       h('div', { class: 'pa-panel-title', text: '渲染引擎' }),
@@ -934,6 +935,29 @@ export class App {
         text: '渲染与物理是两条独立的轴：任意渲染器都能驱动任意物理引擎，两边互不知情。',
       }),
       this.els.rendererList,
+    );
+    this.renderRendererList();
+
+    // Metrics sit right under the renderer picker: they are what actually gets
+    // read while a scene runs, so they must not be below the fold.
+    if (sim) {
+      el.append(
+        h('div', { class: 'pa-panel-title', text: '运行指标' }),
+        h('div', {
+          class: 'pa-desc',
+          text: '沙盒 / 跑分 / 并排三种模式共用同一套字段与口径；测不到的项目写「—」和原因，不写 0。',
+        }),
+        this.els.metrics,
+      );
+      const runNotes = sim.notes;
+      if (runNotes.length) {
+        el.append(
+          h('div', { class: 'pa-section' }, ...runNotes.map((n) => h('span', { class: 'pa-note', text: n }))),
+        );
+      }
+    }
+
+    el.append(
       h('div', { class: 'pa-panel-title', text: '当前场景' }),
       h(
         'div',
@@ -982,24 +1006,6 @@ export class App {
             : null,
         ),
       );
-    }
-
-    const sim = slot?.sim;
-    if (sim) {
-      const notes = sim.notes;
-      el.append(
-        h('div', { class: 'pa-panel-title', text: '运行指标' }),
-        h('div', {
-          class: 'pa-desc',
-          text: '沙盒 / 跑分 / 并排三种模式共用同一套字段与口径；测不到的项目写「—」和原因，不写 0。',
-        }),
-        this.els.metrics,
-      );
-      if (notes.length) {
-        el.append(
-          h('div', { class: 'pa-section' }, ...notes.map((n) => h('span', { class: 'pa-note', text: n }))),
-        );
-      }
     }
 
     el.append(
