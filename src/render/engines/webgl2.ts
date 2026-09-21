@@ -508,13 +508,18 @@ export class WebGL2RenderEngine implements IRenderEngine {
     const gl = this.gl;
     const half = 100;
     const step = 2;
+    // Lifted off y=0 by a hair: the ground bodies' top face sits exactly at 0,
+    // and three.js only wins that depth fight because its GridHelper material
+    // is transparent and therefore drawn after the opaque pass. A 2 cm offset
+    // is invisible at any camera distance and needs no ordering tricks.
+    const y = 0.02;
     const lines: number[] = [];
     const major: [number, number, number] = [0.765, 0.796, 0.847];
     const minor: [number, number, number] = [0.867, 0.890, 0.925];
     for (let i = -half; i <= half; i += step) {
       const c = i % 10 === 0 ? major : minor;
-      lines.push(-half, 0, i, ...c, half, 0, i, ...c);
-      lines.push(i, 0, -half, ...c, i, 0, half, ...c);
+      lines.push(-half, y, i, ...c, half, y, i, ...c);
+      lines.push(i, y, -half, ...c, i, y, half, ...c);
     }
     this.gridVertexCount = lines.length / 6;
     const vao = gl.createVertexArray()!;
