@@ -6,7 +6,9 @@ import { PROBES, runSelfTest, selfTestToCsv, type SelfTestRow } from '../core/se
 import { SCENARIOS } from '../scenarios';
 import { importedScenario } from '../scenarios/imported';
 import type { Scenario } from '../scenarios/types';
-import { Viewport, slotRects } from '../render/viewport';
+import { slotRects } from '../render/layout';
+import { loadRenderers, rendererById, type RendererEntry } from '../render/registry';
+import type { IRenderEngine, RenderStats } from '../render/types';
 import { clear, download, fmt, fmtBytes, h } from './dom';
 import { loadModelFile } from './importer';
 
@@ -45,8 +47,15 @@ export class App {
   private engines: EngineEntry[] = [];
   private scenarios: Scenario[] = [...SCENARIOS];
 
-  private viewport!: Viewport;
+  private viewport!: IRenderEngine;
   private slots = new Map<string, Slot>();
+
+  /** Renderers are an independent axis: any of them can drive any physics engine. */
+  private renderers: RendererEntry[] = [];
+  private rendererId = 'three';
+  private rendererStats: RenderStats = { drawCalls: 0, triangles: 0 };
+  /** Wall-clock ms of the last successful renderer swap, shown in the panel. */
+  private lastSwapMs = 0;
 
   private mode: Mode = 'sandbox';
   private scenario: Scenario = SCENARIOS[0];
@@ -82,6 +91,7 @@ export class App {
   private els!: {
     engineList: HTMLElement;
     scenarioList: HTMLElement;
+    rendererList: HTMLElement;
     inspector: HTMLElement;
     stage: HTMLElement;
     benchPane: HTMLElement;
@@ -96,6 +106,7 @@ export class App {
 
   async start(): Promise<void> {
     this.engines = await loadRegistry();
+    this.renderers = await loadRenderers();
 
     // Deep links: ?engine=jolt&scene=pyramid&bodies=300 preselects the sandbox.
     // The hash written by syncHash is parsed as a fallback so a shared/reloaded
@@ -125,6 +136,8 @@ export class App {
     for (const s of SCENARIOS.slice(0, 4)) this.benchScenarioIds.add(s.id);
 
     this.buildShell();
+    // The renderer is a plug-in too, so it boots after the shell exists.
+    await this.bootRenderer(this.rendererId);
     this.bindKeys();
     this.syncHash();
     this.exposeAutomationHooks();
@@ -188,6 +201,7 @@ export class App {
     this.els = {
       engineList: engines,
       scenarioList: h('div'),
+      rendererList: h('div'),
       inspector,
       stage,
       benchPane,
@@ -210,25 +224,91 @@ export class App {
     const shell = h('div', { class: 'pa-shell' }, header, sidebarLeft, stage, inspector, benchPane, controls);
     this.root.append(shell);
 
-    this.viewport = new Viewport(stage, {
-      maxPixelRatio: 1.5,
-      onResize: () => this.layoutOverlay(),
-    });
-    this.viewport.onContextLost = () => {
-      this.showOverlay(
-        'WebGL 上下文丢失（通常是显卡驱动重置或显存不足）。<br>' +
-        '刷新页面即可恢复；也可以先关掉其它占用 GPU 的标签页。',
-        true,
-      );
-    };
     stage.append(this.els.overlay);
 
     this.setupDropTarget(stage);
     this.renderEngineList();
     this.renderScenarioList();
+    this.renderRendererList();
     this.renderInspector();
     this.renderControls();
     requestAnimationFrame(() => this.layoutOverlay());
+  }
+
+  // --------------------------------------------------------------- renderer
+
+  /**
+   * Boots a renderer and makes it current.
+   *
+   * The replacement is created *first*: a renderer that cannot start (no WebGPU
+   * adapter, a blocked dynamic import) must not take the working one down with
+   * it, so the old context is only disposed once the new one is up.
+   *
+   * Every layer belongs to one renderer instance, so a swap replays each slot's
+   * `setBodies` against the new backend - that is what keeps the two axes
+   * (physics / rendering) genuinely independent.
+   */
+  private async bootRenderer(id: string): Promise<void> {
+    const entry = rendererById(this.renderers, id);
+    const engine = await entry.boot(this.els.stage);
+    engine.onResize = () => this.layoutOverlay();
+    engine.onContextLost = () => {
+      this.showOverlay(
+        `${esc(entry.meta.name)} 的绘图上下文丢失（通常是显卡驱动重置或显存不足）。<br>` +
+        '刷新页面即可恢复；也可以先关掉其它占用 GPU 的标签页，或在右侧换一个渲染引擎。',
+        true,
+      );
+    };
+    const previous = this.viewport;
+    this.viewport = engine;
+    this.rendererId = id;
+    // Framing is per-renderer (camera lives inside the backend), so the next
+    // activate pass must re-frame instead of trusting the old camera.
+    this.framed = false;
+    previous?.dispose();
+    this.replayLayers();
+    this.renderRendererList();
+    this.draw();
+  }
+
+  /** Re-creates every slot's layer on the current renderer. */
+  private replayLayers(): void {
+    for (const s of this.slots.values()) {
+      if (!s.sim) continue;
+      const layer = this.viewport.addLayer(s.entry.meta.id, parseInt(s.entry.meta.accent.slice(1), 16));
+      layer.setBodies(s.sim.world?.bodies ?? []);
+    }
+  }
+
+  /** Runtime renderer swap, driven by the sidebar. Never throws. */
+  private async setRenderer(id: string): Promise<void> {
+    if (id === this.rendererId) return;
+    const name = rendererById(this.renderers, id).meta.name;
+    this.showOverlay(`正在启动 ${esc(name)} …`);
+    const t0 = performance.now();
+    try {
+      await this.bootRenderer(id);
+      await this.activateForMode(true);
+      this.renderRendererList();
+      this.lastSwapMs = performance.now() - t0;
+      this.hideOverlay();
+    } catch (e) {
+      this.lastSwapMs = 0;
+      this.showOverlay(
+        `${esc(name)} 启动失败：${esc(e instanceof Error ? e.message : String(e))}<br>` +
+        `已保留 ${esc(rendererById(this.renderers, this.rendererId).meta.name)}。`,
+        true,
+      );
+      this.renderRendererList();
+    }
+  }
+
+  /** One frame of drawing, shared by the loop and by explicit re-renders. */
+  private draw(): void {
+    if (!this.viewport) return;
+    const ids = this.activeIds();
+    this.viewport.render(ids.map((id) => ({ id, label: id })));
+    this.viewport.updateCamera();
   }
 
   private setupDropTarget(stage: HTMLElement): void {
@@ -483,8 +563,7 @@ export class App {
       }
     }
     if (this.mode !== 'bench') {
-      this.viewport.render(ids.map((id) => ({ id, label: id })));
-      this.viewport.controls.update();
+      this.draw();
     }
     this.updateHud();
   };
@@ -494,6 +573,9 @@ export class App {
     if (this.mode === 'bench') return;
     this.hudAccum++;
     if (this.hudAccum % 6 !== 0) return;
+    // Sampled with the HUD rather than every frame: the counters walk every
+    // layer's buffers, which is real work at 500 bodies.
+    this.rendererStats = this.viewport.stats();
     const ids = this.activeIds();
     const multi = ids.length > 1;
     const el = clear(this.els.hud);
@@ -616,6 +698,53 @@ export class App {
     }
   }
 
+  /**
+   * The renderer axis.
+   *
+   * Single-select on purpose: one backend drives every pane. That keeps the
+   * physics comparison honest (all panes rasterised identically) and makes the
+   * renderer comparison measurable (same physics, different backend).
+   */
+  private renderRendererList(): void {
+    const el = clear(this.els.rendererList);
+    for (const entry of this.renderers) {
+      const selected = entry.meta.id === this.rendererId;
+      el.append(
+        h(
+          'button',
+          {
+            class: `pa-engine${selected ? ' on' : ''}`,
+            title: entry.meta.homepage,
+            onclick: () => void this.setRenderer(entry.meta.id),
+          },
+          h(
+            'div',
+            { class: 'pa-engine-head' },
+            h('i', { class: 'pa-dot', style: `background:${entry.meta.accent}` }),
+            h('span', { class: 'pa-engine-name', text: entry.meta.name }),
+            h(
+              'span',
+              { class: 'pa-engine-badges' },
+              h('span', { class: 'pa-badge', text: entry.meta.backend }),
+            ),
+          ),
+          h('div', { class: 'pa-engine-blurb', text: entry.meta.blurb }),
+          h(
+            'div',
+            { class: 'pa-engine-meta' },
+            h('span', { text: entry.meta.license }),
+            entry.meta.costKb > 0
+              ? h('span', { text: `+${entry.meta.costKb} kB` })
+              : h('span', { class: 'pa-ok', text: '零额外依赖' }),
+            selected && this.lastSwapMs
+              ? h('span', { text: `切换 ${this.lastSwapMs.toFixed(0)} ms` })
+              : null,
+          ),
+        ),
+      );
+    }
+  }
+
   private async selectEngine(id: string): Promise<void> {
     if (this.mode === 'compare') {
       if (this.compareIds.includes(id)) {
@@ -676,6 +805,12 @@ export class App {
     const meta: EngineMeta | undefined = slot?.entry.meta;
 
     el.append(
+      h('div', { class: 'pa-panel-title', text: '渲染引擎' }),
+      h('div', {
+        class: 'pa-desc',
+        text: '渲染与物理是两条独立的轴：任意渲染器都能驱动任意物理引擎，两边互不知情。',
+      }),
+      this.els.rendererList,
       h('div', { class: 'pa-panel-title', text: '当前场景' }),
       h(
         'div',
@@ -942,10 +1077,15 @@ export class App {
       getBenchResults: () => this.benchResults,
       getSelfTestResults: () => this.selfTestRows,
       hudText: () => this.els.hud.textContent ?? '',
-      /** Diagnostic: live WebGL resource counters (geometries / programs / draw calls). */
-      resourceInfo: () => this.viewport.resourceInfo(),
+      /** Diagnostic: live GPU resource counters (geometries / programs / draw calls). */
+      resourceInfo: () => this.viewport.stats(),
       /** Diagnostic: per-layer instance matrix decomposition. */
-      renderProbe: () => this.viewport.renderProbe(),
+      renderProbe: () => this.viewport.probe(),
+      /** Renderer axis, scriptable: list / read current / hot-swap. */
+      listRenderers: () => this.renderers.map((r) => r.meta),
+      currentRenderer: () => this.rendererId,
+      selectRenderer: (id: string) => this.setRenderer(id),
+      rendererStats: () => this.viewport.stats(),
       /** Diagnostic: per active engine, any body pose that is not renderable. */
       simStateSummary: () =>
         this.activeIds().map((id) => {
