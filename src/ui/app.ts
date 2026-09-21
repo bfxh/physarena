@@ -127,8 +127,14 @@ export class App {
     // URL restores what its own hash claims.
     const q = new URLSearchParams(location.search || location.hash.replace(/^#/, ''));
     const wantEngine = q.get('engine');
+    const wantRenderer = q.get('renderer');
     const wantScene = q.get('scene');
     const wantMode = q.get('mode');
+    // The renderer axis is deep-linkable too, so a script (or a shared URL) can
+    // pin both axes at once: ?engine=jolt&renderer=webgpu&scene=pyramid
+    if (wantRenderer && this.renderers.some((r) => r.meta.id === wantRenderer && !r.unavailable)) {
+      this.rendererId = wantRenderer;
+    }
     if (wantScene && SCENARIOS.some((s) => s.id === wantScene)) {
       this.scenario = SCENARIOS.find((s) => s.id === wantScene)!;
       this.bodies = this.scenario.defaultBodies;
@@ -314,6 +320,7 @@ export class App {
       await this.activateForMode(true);
       this.renderRendererList();
       this.lastSwapMs = performance.now() - t0;
+      this.syncHash();
       this.hideOverlay();
     } catch (e) {
       this.lastSwapMs = 0;
@@ -370,6 +377,7 @@ export class App {
     const p = new URLSearchParams();
     p.set('mode', this.mode);
     p.set('engine', this.sandboxEngineId);
+    p.set('renderer', this.rendererId);
     p.set('scene', this.scenario.id);
     p.set('bodies', String(this.bodies));
     history.replaceState(null, '', `#${p.toString()}`);

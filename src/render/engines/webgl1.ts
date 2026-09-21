@@ -115,6 +115,7 @@ export class WebGL1Layer implements IRenderLayer {
   private gl: WebGLRenderingContext;
   private inst: ANGLE_instanced_arrays;
   private buckets: Gl1Bucket[] = [];
+  private locCache = new Map<WebGLProgram, { pos: number; nrm: number; inst: number; col: number }>();
   private disposed = false;
 
   constructor(readonly id: string, gl: WebGLRenderingContext, inst: ANGLE_instanced_arrays) {
@@ -207,16 +208,35 @@ export class WebGL1Layer implements IRenderLayer {
   }
 
   /**
+   * Attribute locations, looked up once per program.
+   *
+   * `getAttribLocation` is a synchronous driver query and was previously called
+   * four times per bucket per frame - pure overhead that has nothing to do with
+   * the WebGL1-vs-WebGL2 comparison this backend exists to make.
+   */
+  private locs(program: WebGLProgram): { pos: number; nrm: number; inst: number; col: number } {
+    let c = this.locCache.get(program);
+    if (!c) {
+      const gl = this.gl;
+      c = {
+        pos: gl.getAttribLocation(program, 'aPosition'),
+        nrm: gl.getAttribLocation(program, 'aNormal'),
+        inst: gl.getAttribLocation(program, 'aInst0'),
+        col: gl.getAttribLocation(program, 'aInstColor'),
+      };
+      this.locCache.set(program, c);
+    }
+    return c;
+  }
+
+  /**
    * Binds every attribute by hand. In WebGL2 this whole block collapses into a
    * single `bindVertexArray` - that difference is what this backend measures.
    */
   draw(program: WebGLProgram) {
     const gl = this.gl;
     const inst = this.inst;
-    const aPosition = gl.getAttribLocation(program, 'aPosition');
-    const aNormal = gl.getAttribLocation(program, 'aNormal');
-    const aInst0 = gl.getAttribLocation(program, 'aInst0');
-    const aInstColor = gl.getAttribLocation(program, 'aInstColor');
+    const { pos: aPosition, nrm: aNormal, inst: aInst0, col: aInstColor } = this.locs(program);
     let calls = 0;
     let triangles = 0;
     let instances = 0;
@@ -377,6 +397,8 @@ export class WebGL1RenderEngine implements IRenderEngine {
   private lastDrawCalls = 0;
   private lastTriangles = 0;
   private lastInstances = 0;
+  private lineLocPos: number | null = null;
+  private lineLocCol: number | null = null;
 
   onResize: () => void = () => {};
   onContextLost: (() => void) | null = null;
@@ -544,8 +566,8 @@ export class WebGL1RenderEngine implements IRenderEngine {
     void pw; void ph;
     gl.useProgram(this.lineProgram);
     gl.uniformMatrix4fv(this.lineUniforms.uViewProj, false, vp);
-    const aPosition = gl.getAttribLocation(this.lineProgram, 'aPosition');
-    const aColor = gl.getAttribLocation(this.lineProgram, 'aColor');
+    const aPosition = this.lineLocPos ?? (this.lineLocPos = gl.getAttribLocation(this.lineProgram, 'aPosition'));
+    const aColor = this.lineLocCol ?? (this.lineLocCol = gl.getAttribLocation(this.lineProgram, 'aColor'));
     gl.depthMask(false);
     for (const [buf, count, alpha] of [
       [this.floorBufs[0], this.floorCount, 0.55],
