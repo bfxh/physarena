@@ -28,6 +28,7 @@ export type ScenarioGroup =
   | '经典动力学'
   | '约束与关节'
   | '极端工况'
+  | '破坏与流体'
   | '碰撞形状';
 
 export const SCENARIO_GROUPS: ScenarioGroup[] = [
@@ -35,6 +36,7 @@ export const SCENARIO_GROUPS: ScenarioGroup[] = [
   '经典动力学',
   '约束与关节',
   '极端工况',
+  '破坏与流体',
   '碰撞形状',
 ];
 

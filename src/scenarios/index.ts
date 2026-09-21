@@ -1,4 +1,5 @@
 import { DYNAMICS_SCENARIOS } from './dynamics';
+import { HAVOC_SCENARIOS } from './havoc';
 import { JOINT_SCENARIOS } from './joints';
 import { SHAPE_SCENARIOS } from './shapes';
 import { STACKING_SCENARIOS } from './stacking';
@@ -13,6 +14,7 @@ export const SCENARIOS: Scenario[] = [
   ...DYNAMICS_SCENARIOS,
   ...JOINT_SCENARIOS,
   ...STRESS_SCENARIOS,
+  ...HAVOC_SCENARIOS,
   ...SHAPE_SCENARIOS,
 ];
 
