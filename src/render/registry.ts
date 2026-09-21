@@ -14,12 +14,13 @@ export interface RendererEntry {
 }
 
 /** Order defines the sidebar order: established engines first, minimal last. */
-const MODULE_IDS = ['three'] as const;
+const MODULE_IDS = ['three', 'webgl2'] as const;
 
 type Loader = () => Promise<{ meta: RenderEngineMeta; create(): IRenderEngine }>;
 
 const LOADERS: Record<string, Loader> = {
   three: () => import('./engines/three') as Promise<any>,
+  webgl2: () => import('./engines/webgl2') as Promise<any>,
 };
 
 let cached: RendererEntry[] | null = null;
