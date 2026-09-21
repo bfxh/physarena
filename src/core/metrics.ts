@@ -279,11 +279,15 @@ export function collectMetrics(src: MetricSources): MetricSection[] {
   sections.push({ key: 'render', title: '渲染管线', rows: renderRows });
 
   // ------------------------------------------------------------- host
-  const canvas = document.querySelector('canvas');
+  // .pa-canvas covers every backend: canvas elements, an <svg>, or the CSS
+  // scene wrapper. Querying `canvas` alone made the host rows read '—' for
+  // the DOM-based renderers, which looked like missing data rather than
+  // a different element type.
+  const canvas = document.querySelector('.pa-canvas') as HTMLElement | null;
   const hostRows: MetricRow[] = [
     row('h-viewport', '视口（CSS 像素）', canvas ? `${canvas.clientWidth} × ${canvas.clientHeight}` : '—'),
-    row('h-backing', '绘图缓冲', canvas ? `${canvas.width} × ${canvas.height}` : '—', {
-      hint: '硬件后端会按像素比放大缓冲；软件光栅保持 1:1',
+    row('h-backing', '绘图缓冲', backingSize(canvas), {
+      hint: '硬件后端会按像素比放大缓冲；软件光栅保持 1:1；SVG / CSS 后端没有独立缓冲',
     }),
     row('h-dpr', '设备像素比', String(window.devicePixelRatio || 1), {
       raw: window.devicePixelRatio || 1,
@@ -298,6 +302,22 @@ export function collectMetrics(src: MetricSources): MetricSection[] {
 function sourceCostLabel(meta?: RenderEngineMeta): string {
   if (!meta) return '—';
   return meta.costKb > 0 ? `+${meta.costKb} kB（gzip）` : '零额外依赖';
+}
+
+/**
+ * Drawing-buffer size, for whichever element the active backend draws into.
+ *
+ * A `<canvas>` has numeric width/height; an `<svg>` exposes SVGAnimatedLength
+ * for the same names and a CSS-backed renderer has neither, so the numeric
+ * check is what distinguishes them without backend-specific knowledge here.
+ */
+function backingSize(el: HTMLElement | null): string {
+  if (!el) return '—';
+  const c = el as HTMLCanvasElement;
+  if (typeof c.width === 'number' && typeof c.height === 'number') {
+    return `${c.width} × ${c.height}`;
+  }
+  return `${el.clientWidth} × ${el.clientHeight}（无独立绘图缓冲）`;
 }
 
 function readJsHeap(): number | null {

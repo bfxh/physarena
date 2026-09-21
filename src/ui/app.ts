@@ -298,7 +298,15 @@ export class App {
   /** Runtime renderer swap, driven by the sidebar. Never throws. */
   private async setRenderer(id: string): Promise<void> {
     if (id === this.rendererId) return;
-    const name = rendererById(this.renderers, id).meta.name;
+    const entry = rendererById(this.renderers, id);
+    if (entry.unavailable) {
+      this.showOverlay(
+        `${esc(entry.meta.name)} 在当前环境不可用：<br>${esc(entry.unavailable)}`,
+        true,
+      );
+      return;
+    }
+    const name = entry.meta.name;
     this.showOverlay(`正在启动 ${esc(name)} …`);
     const t0 = performance.now();
     try {
@@ -736,12 +744,16 @@ export class App {
     const el = clear(this.els.rendererList);
     for (const entry of this.renderers) {
       const selected = entry.meta.id === this.rendererId;
+      // A backend the environment cannot run stays visible but disabled, with
+      // the reason attached - hiding it would suggest the lab only has 9 backends.
+      const blocked = !!entry.unavailable;
       el.append(
         h(
           'button',
           {
-            class: `pa-engine${selected ? ' on' : ''}`,
-            title: entry.meta.homepage,
+            class: `pa-engine${selected ? ' on' : ''}${blocked ? ' err' : ''}`,
+            title: blocked ? entry.unavailable! : entry.meta.homepage,
+            disabled: blocked ? true : undefined,
             onclick: () => void this.setRenderer(entry.meta.id),
           },
           h(
@@ -767,6 +779,9 @@ export class App {
               ? h('span', { text: `切换 ${this.lastSwapMs.toFixed(0)} ms` })
               : null,
           ),
+          blocked
+            ? h('div', { class: 'pa-engine-msg', text: '当前环境不可用：' + entry.unavailable })
+            : null,
         ),
       );
     }

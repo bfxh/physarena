@@ -295,8 +295,11 @@ export class BabylonRenderEngine implements IRenderEngine {
     this.camera.maxZ = 40000;
     this.camera.fov = (50 * Math.PI) / 180;
     this.camera.wheelDeltaPercentage = 0.02;
-    // The lab owns the frame loop; letting Babylon run its own would double it.
-    engine.runRenderLoop(() => { /* driven by render() */ });
+    // Deliberately NO engine.runRenderLoop() here. Babylon's loop runs its own
+    // beginFrame/endFrame every rAF tick, and endFrame swaps the back buffer -
+    // so an empty render loop presents an empty frame *after* the frame this
+    // lab drew, leaving a blank canvas that still reports correct draw counts.
+    // The host owns the loop; render() below does the frame.
 
     // Same rig as the other backends.
     const hemi = new HemisphericLight('pa-hemi', new Vector3(0, 1, 0), scene);
@@ -472,6 +475,29 @@ export class BabylonRenderEngine implements IRenderEngine {
       cssSize: [this.canvasEl.clientWidth, this.canvasEl.clientHeight],
     };
     out.__backend = { kind: 'webgl2', renderer: meta.name, framework: 'babylon' };
+    // Internal state, because "probe says the data is right but the pane is
+    // blank" is a pipeline problem and the pipeline lives inside Babylon.
+    out.__diag = {
+      meshes: this.scene.meshes.length,
+      activeCamera: this.scene.activeCamera ? this.scene.activeCamera.name : null,
+      cameraViewport: this.camera.viewport
+        ? [this.camera.viewport.x, this.camera.viewport.y, this.camera.viewport.width, this.camera.viewport.height]
+        : null,
+      renderSize: [this.engine.getRenderWidth(), this.engine.getRenderHeight()],
+      hardwareScale: this.engine.getHardwareScalingLevel(),
+      autoClear: this.scene.autoClear,
+      renderPasses: this.scene.getActiveMeshes().length,
+      meshesDetail: this.scene.meshes.map((m) => ({
+        name: m.name,
+        verts: m.getTotalVertices(),
+        indices: m.getTotalIndices(),
+        thin: (m as unknown as { thinInstanceCount?: number }).thinInstanceCount ?? 0,
+        enabled: m.isEnabled(),
+        visible: m.isVisible,
+        hasMaterial: !!m.material,
+        materialReady: m.material ? m.material.isReady(m) : false,
+      })),
+    };
     return out;
   }
 

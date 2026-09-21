@@ -206,6 +206,26 @@ input, select { font-family: inherit; font-size: inherit; color: inherit; }
    never be mistaken for a number. */
 .pa-metric .v.miss { font-family: var(--sans); font-style: italic; color: var(--text-faint); }
 .pa-metric .v.warn { color: var(--warn); }
+
+/* Renderer cards that the environment cannot run stay listed but inert. */
+.pa-engine:disabled { cursor: not-allowed; opacity: 0.72; }
+
+/* CSS 3D backend: the browser's own compositor does the work, so there is no
+   <canvas> - just a perspective wrapper and one element per body. */
+.pa-c3d-scene {
+  position: relative; overflow: hidden;
+  background: #eef1f6;
+  perspective-origin: 50% 50%;
+}
+.pa-c3d-cam {
+  position: absolute; left: 50%; top: 50%;
+  transform-style: preserve-3d;
+}
+.pa-c3d-obj {
+  position: absolute;
+  transform-style: preserve-3d;
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 70, 0.12);
+}
 .pa-desc { color: var(--text-dim); line-height: 1.6; font-size: 11.5px; }
 .pa-note {
   display: inline-block; margin: 3px 4px 0 0; padding: 2px 7px; border-radius: 5px;

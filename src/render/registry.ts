@@ -11,26 +11,49 @@ export interface RendererEntry {
   meta: RenderEngineMeta;
   /** Creates the context and mounts a canvas into `host`. */
   boot(host: HTMLElement): Promise<IRenderEngine>;
+  /**
+   * Set when the backend exists but cannot run in this environment (no WebGPU
+   * adapter, missing extension). The card stays in the sidebar with the reason
+   * attached: "your browser cannot run this" is a fact worth showing, not a
+   * renderer that quietly does not exist.
+   */
+  unavailable?: string;
 }
 
-/** Order defines the sidebar order: established engines first, minimal last. */
-const MODULE_IDS = ['three', 'babylon', 'webgl2', 'canvas2d'] as const;
+/** Order defines the sidebar order: frameworks, then hand-written GL, then CPU. */
+const MODULE_IDS = [
+  'three', 'babylon', 'webgpu', 'webgl2', 'webgl1', 'points', 'wireframe', 'canvas2d', 'svg', 'css3d',
+] as const;
 
-type Loader = () => Promise<{ meta: RenderEngineMeta; create(): IRenderEngine }>;
+interface RendererModule {
+  meta: RenderEngineMeta;
+  create(): IRenderEngine;
+  availability?(): string | undefined;
+}
+
+type Loader = () => Promise<RendererModule>;
 
 const LOADERS: Record<string, Loader> = {
   three: () => import('./engines/three') as Promise<any>,
   babylon: () => import('./engines/babylon') as Promise<any>,
+  webgpu: () => import('./engines/webgpu') as Promise<any>,
   webgl2: () => import('./engines/webgl2') as Promise<any>,
+  webgl1: () => import('./engines/webgl1') as Promise<any>,
+  points: () => import('./engines/points') as Promise<any>,
+  wireframe: () => import('./engines/wireframe') as Promise<any>,
   canvas2d: () => import('./engines/canvas2d') as Promise<any>,
+  svg: () => import('./engines/svg') as Promise<any>,
+  css3d: () => import('./engines/css3d') as Promise<any>,
 };
 
 let cached: RendererEntry[] | null = null;
 
 /**
- * Loads only the metadata. A renderer whose module fails to load (an optional
- * dependency that is not installed, say) is dropped from the list rather than
- * breaking the whole boot - the guard rail the user asked for.
+ * Loads only the metadata (a few hundred bytes each) and asks every module
+ * whether it can actually run here. A module that fails to load at all is
+ * dropped; one that loads but cannot run stays listed, disabled, with the
+ * reason - the distinction matters, because the second case is a property of
+ * the environment rather than a broken renderer.
  */
 export async function loadRenderers(): Promise<RendererEntry[]> {
   if (cached) return cached;
@@ -44,8 +67,15 @@ export async function loadRenderers(): Promise<RendererEntry[]> {
       return;
     }
     const mod = r.value;
+    let unavailable: string | undefined;
+    try {
+      unavailable = mod.availability?.();
+    } catch (e) {
+      unavailable = e instanceof Error ? e.message : String(e);
+    }
     entries.push({
       meta: mod.meta,
+      unavailable,
       boot: async (host: HTMLElement) => {
         const engine = mod.create();
         await engine.init(host);
@@ -54,7 +84,7 @@ export async function loadRenderers(): Promise<RendererEntry[]> {
     });
   });
   if (failed.length) {
-    console.warn('[physarena] 渲染器加载失败（已跳过）:\n' + failed.join('\n'));
+    console.warn('[physarena] 渲染器模块加载失败（已跳过）:\n' + failed.join('\n'));
   }
   if (!entries.length) throw new Error('没有可用的渲染引擎：' + failed.join('; '));
   cached = entries;
