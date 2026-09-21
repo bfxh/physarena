@@ -1,4 +1,4 @@
-import type { EngineMeta, ShapeDesc, Vec3, WorldDesc } from '../core/types';
+import type { EngineMeta, EngineStats, ShapeDesc, Vec3, WorldDesc } from '../core/types';
 import { PhysicsEngineBase } from './base';
 import { hullFromPoints } from './hull';
 import { adaptShape, coneHullPoints, quatOr, shapeVolume } from './shared';
@@ -260,10 +260,21 @@ class CannonEngine extends PhysicsEngineBase {
     b.applyImpulse(new this.C.Vec3(...impulse));
   }
 
-  stats() {
+  stats(): EngineStats {
     // No real per-engine memory figure is available: the JS heap is
     // page-wide and reporting it next to a wasm heap would be misleading.
-    return { bodyCount: this.bodies.length };
+    const out: EngineStats = {
+      bodyCount: this.bodies.length,
+      notes: {
+        memoryBytes: '纯 JS 引擎，没有独立堆可测；页面 JS 堆包含 UI 与全部渲染器，不能当作它的内存',
+      },
+    };
+    // Contact count is the single best predictor of solver cost, so report it
+    // whenever the engine actually exposes it. Probed defensively: an API that
+    // does not exist must yield "no data", never a fabricated 0.
+    const contacts = (this.world as unknown as { contacts?: unknown[] } | null)?.contacts;
+    if (Array.isArray(contacts)) out.contactCount = contacts.length;
+    return out;
   }
 
   protected disposeWorld(): void {

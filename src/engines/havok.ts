@@ -1,4 +1,4 @@
-import type { EngineMeta, ShapeDesc, Vec3, WorldDesc } from '../core/types';
+import type { EngineMeta, EngineStats, ShapeDesc, Vec3, WorldDesc } from '../core/types';
 import { PhysicsEngineBase } from './base';
 import { adaptShape, quatOr } from './shared';
 
@@ -327,10 +327,14 @@ class HavokEngine extends PhysicsEngineBase {
     try { this.hk.HP_Body_ApplyImpulse(b, [0, 0, 0], [...impulse]); } catch { /* ignore */ }
   }
 
-  stats() {
+  stats(): EngineStats {
     return {
       bodyCount: this.bodyIds.length,
       memoryBytes: this.hk?.HEAPU8?.byteLength,
+      notes: {
+        memoryBytes:
+          'wasm 堆容量（HEAPU8.byteLength），不是使用量；该构建的堆尺寸固定，因此不随场景变化',
+      },
     };
   }
 

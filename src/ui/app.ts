@@ -1,4 +1,4 @@
-import type { EngineMeta, IPhysicsEngine, Vec3 } from '../core/types';
+import type { EngineMeta, EngineStats, IPhysicsEngine, Vec3 } from '../core/types';
 import { Simulation } from '../core/simulation';
 import { DEFAULT_BENCH, resultsToCsv, runBenchmark, type BenchResult } from '../core/bench';
 import { loadRegistry, type EngineEntry } from '../engines/registry';
@@ -9,6 +9,8 @@ import type { Scenario } from '../scenarios/types';
 import { slotRects } from '../render/layout';
 import { loadRenderers, rendererById, type RendererEntry } from '../render/registry';
 import type { IRenderEngine, RenderStats } from '../render/types';
+import { collectMetrics, metricsToRows, type MetricSection } from '../core/metrics';
+import { FrameWatchdog, Guards, type GuardKind } from '../core/guard';
 import { clear, download, fmt, fmtBytes, h } from './dom';
 import { loadModelFile } from './importer';
 
@@ -84,6 +86,16 @@ export class App {
     return this.benchRunning || this.selfTestRunning;
   }
 
+  /**
+   * Every crossing into third-party code goes through these: a trapped wasm
+   * module, a throwing solver or a lost context degrades one subsystem instead
+   * of the page.
+   */
+  private guards = new Guards();
+  private watchdog = new FrameWatchdog(250);
+  /** Last full metric set, kept so the automation hooks can export it. */
+  private lastMetrics: MetricSection[] = [];
+
   /** Frames per second of the render loop itself, not of the physics. */
   private renderFps = 0;
   private lastFrame = 0;
@@ -93,6 +105,8 @@ export class App {
     scenarioList: HTMLElement;
     rendererList: HTMLElement;
     inspector: HTMLElement;
+    /** Persistent container so the metric panel updates without a rebuild. */
+    metrics: HTMLElement;
     stage: HTMLElement;
     benchPane: HTMLElement;
     hud: HTMLElement;
@@ -203,6 +217,7 @@ export class App {
       scenarioList: h('div'),
       rendererList: h('div'),
       inspector,
+      metrics: h('div'),
       stage,
       benchPane,
       hud: h('div', { class: 'pa-hud' }),
@@ -551,22 +566,34 @@ export class App {
     const dt = this.lastFrame ? (now - this.lastFrame) / 1000 : 1 / 60;
     this.lastFrame = now;
     this.renderFps = this.renderFps ? this.renderFps * 0.9 + (1 / Math.max(dt, 1e-4)) * 0.1 : 1 / dt;
+    this.watchdog.tick(now);
 
     const ids = this.activeIds();
     for (const id of ids) {
       const s = this.slot(id);
       if (!s?.sim) continue;
-      const steps = s.sim.advance(dt);
+      // Guarded: a solver that throws, or a wasm module that has trapped and is
+      // now permanently poisoned, must cost this one pane rather than the
+      // session. The budget is a "clearly stalled the page" line, not a 60 fps
+      // target - solving 500 bodies legitimately takes tens of ms.
+      const steps = this.guards.budgeted(`step:${id}`, 140, () => s.sim!.advance(dt), 0);
       if (steps > 0) {
+        const states = this.guards.attempt(`read:${id}`, () => s.sim!.readStates(), []);
         const layer = this.viewport.layer(id);
-        layer?.sync(s.sim.readStates());
+        if (layer && states.length) {
+          this.guards.attempt(`sync:${id}`, () => layer.sync(states), undefined);
+        }
       }
     }
     if (this.mode !== 'bench') {
-      this.draw();
+      this.guards.attempt('render', () => this.draw(), undefined);
     }
     this.updateHud();
+    this.metricsAccum++;
+    if (this.metricsAccum % 12 === 0) this.updateMetrics();
   };
+
+  private metricsAccum = 0;
 
   private hudAccum = 0;
   private updateHud(): void {
@@ -745,6 +772,102 @@ export class App {
     }
   }
 
+  // -------------------------------------------------------------- metrics
+
+  /**
+   * Engine-reported counters. A solver whose `stats()` throws reports "no
+   * data" rather than taking the panel down with it.
+   */
+  private engineStatsFor(id: string | undefined): EngineStats | undefined {
+    if (!id) return undefined;
+    const s = this.slot(id);
+    if (!s?.engine) return undefined;
+    return this.guards.attempt(`stats:${id}`, () => s.engine!.stats?.(), undefined);
+  }
+
+  /**
+   * The single metric panel.
+   *
+   * All three modes render this exact component with this exact row order, so
+   * a sandbox reading and a bench reading can always be lined up. Rows the
+   * active engine cannot measure print "—" plus the reason; never a 0.
+   */
+  private updateMetrics(): void {
+    const host = this.els?.metrics;
+    if (!host) return;
+    const id = this.activeIds()[0];
+    const slot = id ? this.slot(id) : undefined;
+    const sim = slot?.sim ?? null;
+    const rendererMeta = this.renderers.find((r) => r.meta.id === this.rendererId)?.meta;
+
+    const sections = collectMetrics({
+      sim,
+      engineMeta: slot?.entry.meta,
+      engineStats: this.engineStatsFor(id),
+      rendererMeta,
+      renderStats: this.rendererStats,
+      renderFps: this.renderFps,
+      fixedDt: this.fixedDt,
+      rendererSwapMs: this.lastSwapMs,
+      scenarioName: this.scenario.name,
+      buildMs: sim?.buildMs,
+      stateHash: sim ? this.guards.attempt(`hash:${id}`, () => sim.stateHash(), undefined) : undefined,
+      engineBootMs: slot?.bootMs,
+    });
+    this.lastMetrics = sections;
+
+    const el = clear(host);
+    for (const s of sections) {
+      const box = h('div', { class: 'pa-section' });
+      box.append(h('h4', { text: s.title }));
+      for (const r of s.rows) {
+        const line = h(
+          'div',
+          { class: 'pa-metric' },
+          h('span', { class: 'k', text: r.label }),
+          h('span', { class: r.missing ? 'v miss' : 'v', text: r.missing ? '—' : r.value }),
+        );
+        const tip = r.missing ?? r.hint;
+        if (tip) line.title = tip;
+        box.append(line);
+      }
+      el.append(box);
+    }
+
+    // Guard section: the "door" the user asked for, made visible. Only listed
+    // when something actually happened - an empty log is not worth a row.
+    const events = this.guards.recent(5);
+    const box = h('div', { class: 'pa-section' });
+    box.append(h('h4', { text: '守卫' }));
+    box.append(
+      metricLine('最差帧', this.watchdog.verdict(), this.watchdog.stalled ? 'warn' : undefined),
+      metricLine(
+        '引擎隔离',
+        this.quarantinedEngines().length
+          ? `${this.quarantinedEngines().length} 个已隔离：${this.quarantinedEngines().join('、')}`
+          : '无',
+        this.quarantinedEngines().length ? 'warn' : undefined,
+      ),
+      metricLine('记录事件', events.length ? `${events.reduce((a, e) => a + e.repeat, 0)} 次` : '无'),
+    );
+    for (const e of events.reverse()) {
+      const line = metricLine(
+        kindLabel(e.kind),
+        `${e.scope} · ${e.message}${e.repeat > 1 ? `（重复 ${e.repeat} 次）` : ''}`,
+        'warn',
+      );
+      line.title = new Date(e.at).toLocaleTimeString();
+      box.append(line);
+    }
+    el.append(box);
+  }
+
+  private quarantinedEngines(): string[] {
+    return this.engines
+      .filter((e) => this.guards.isQuarantined(`step:${e.meta.id}`))
+      .map((e) => e.meta.name);
+  }
+
   private async selectEngine(id: string): Promise<void> {
     if (this.mode === 'compare') {
       if (this.compareIds.includes(id)) {
@@ -865,19 +988,18 @@ export class App {
     if (sim) {
       const notes = sim.notes;
       el.append(
-        h('div', { class: 'pa-panel-title', text: '本次运行' }),
-        h(
-          'div',
-          { class: 'pa-section' },
-          kv('实际刚体', `${sim.world?.bodies.length ?? 0}`),
-          kv('动态刚体', `${sim.dynamicCount}`),
-          kv('关节', `${sim.world?.joints.length ?? 0}`),
-          kv('构建耗时', `${sim.buildMs.toFixed(1)} ms`),
-          kv('状态指纹', sim.stateHash()),
-          notes.length ? h('div', { style: 'height:8px' }) : null,
-          ...notes.map((n) => h('span', { class: 'pa-note', text: n })),
-        ),
+        h('div', { class: 'pa-panel-title', text: '运行指标' }),
+        h('div', {
+          class: 'pa-desc',
+          text: '沙盒 / 跑分 / 并排三种模式共用同一套字段与口径；测不到的项目写「—」和原因，不写 0。',
+        }),
+        this.els.metrics,
       );
+      if (notes.length) {
+        el.append(
+          h('div', { class: 'pa-section' }, ...notes.map((n) => h('span', { class: 'pa-note', text: n }))),
+        );
+      }
     }
 
     el.append(
@@ -1086,6 +1208,11 @@ export class App {
       currentRenderer: () => this.rendererId,
       selectRenderer: (id: string) => this.setRenderer(id),
       rendererStats: () => this.viewport.stats(),
+      /** The shared metric set, flattened for export. */
+      metrics: () => metricsToRows(this.lastMetrics),
+      /** Guard log: what failed, where, and how often. */
+      guardLog: () => this.guards.log,
+      frameWorstMs: () => this.watchdog.worst,
       /** Diagnostic: per active engine, any body pose that is not renderable. */
       simStateSummary: () =>
         this.activeIds().map((id) => {
@@ -1434,6 +1561,25 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 
 function kv(k: string, v: string): HTMLElement {
   return h('div', { class: 'pa-kv' }, h('span', { text: k }), h('span', { text: v }));
+}
+
+/** One row of the shared metric panel. */
+function metricLine(k: string, v: string, variant?: 'warn'): HTMLElement {
+  return h(
+    'div',
+    { class: 'pa-metric' },
+    h('span', { class: 'k', text: k }),
+    h('span', { class: variant ? `v ${variant}` : 'v', text: v }),
+  );
+}
+
+function kindLabel(kind: GuardKind): string {
+  switch (kind) {
+    case 'throw': return '调用异常';
+    case 'budget': return '超出预算';
+    case 'fault': return '子系统故障';
+    case 'quota': return '配额降级';
+  }
 }
 
 /** Escapes user-controlled text before it goes through the `html:` sink. */

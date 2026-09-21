@@ -531,8 +531,13 @@ export class Canvas2DRenderEngine implements IRenderEngine {
    *
    * The plane replaces the ground *body*: with no depth buffer, one 200 m slab
    * sorted as a single painter instance would cover the grid drawn beneath it.
-   * Painting a real quad and then the lines gives the same read as the GPU
-   * backends, where the grid simply wins the depth fight on a 2 cm offset.
+   *
+   * Two things make the plane drawable at all. Its corners are behind the eye
+   * at every usable camera distance, so projecting the quad directly would drop
+   * it entirely - instead the fill is bounded by the horizon, which for a level
+   * floor and a roll-free camera is always a horizontal screen line. And every
+   * grid segment is clipped against the near plane before projection, because a
+   * line spanning -70..70 m almost always has one end behind the camera.
    */
   private drawFloor(
     ctx: CanvasRenderingContext2D,
@@ -540,18 +545,23 @@ export class Canvas2DRenderEngine implements IRenderEngine {
     pane: { x: number; y: number; w: number; h: number },
     halfExtent: number,
   ): void {
-    const half = Math.max(20, halfExtent);
-    const corners: Vec3[] = [
-      [-half, 0, -half], [half, 0, -half], [half, 0, half], [-half, 0, half],
-    ];
-    const pts = corners.map((c) => this.project(vp, c, pane));
-    if (pts.every((p) => p !== null)) {
-      ctx.fillStyle = 'rgba(152,162,177,0.95)';
-      ctx.beginPath();
-      ctx.moveTo(pts[0]![0], pts[0]![1]);
-      for (let i = 1; i < 4; i++) ctx.lineTo(pts[i]![0], pts[i]![1]);
-      ctx.closePath();
-      ctx.fill();
+    const eye = this.eye();
+    const half = Math.max(20, Math.min(halfExtent, this.orbit.radius * 4));
+
+    // --- horizon: project a floor point very far along the view direction.
+    let hdx = this.orbit.target[0] - eye[0];
+    let hdz = this.orbit.target[2] - eye[2];
+    const hl = Math.hypot(hdx, hdz) || 1;
+    hdx /= hl; hdz /= hl;
+    const FAR = 1e5;
+    const horizon = this.project(vp, [eye[0] + hdx * FAR, 0, eye[2] + hdz * FAR], pane);
+    if (horizon) {
+      const y = Math.max(pane.y, Math.min(pane.y + pane.h, horizon[1]));
+      const height = pane.y + pane.h - y;
+      if (height > 0) {
+        ctx.fillStyle = 'rgba(152,162,177,0.95)';
+        ctx.fillRect(pane.x, y, pane.w, height);
+      }
     }
 
     ctx.lineWidth = 1;
@@ -559,12 +569,8 @@ export class Canvas2DRenderEngine implements IRenderEngine {
     ctx.beginPath();
     const step = 2;
     for (let i = -half; i <= half; i += step) {
-      const a = this.project(vp, [-half, 0, i], pane);
-      const b = this.project(vp, [half, 0, i], pane);
-      if (a && b) { ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
-      const c = this.project(vp, [i, 0, -half], pane);
-      const d = this.project(vp, [i, 0, half], pane);
-      if (c && d) { ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); }
+      this.strokeSegment(ctx, vp, pane, [-half, 0, i], [half, 0, i], eye);
+      this.strokeSegment(ctx, vp, pane, [i, 0, -half], [i, 0, half], eye);
     }
     ctx.stroke();
 
@@ -574,15 +580,51 @@ export class Canvas2DRenderEngine implements IRenderEngine {
       [[0, 0, 3], '#3d66ff'],
     ];
     for (const [end, color] of axes) {
-      const o = this.project(vp, [0, 0, 0], pane);
-      const e = this.project(vp, end, pane);
-      if (!o || !e) continue;
       ctx.strokeStyle = color;
       ctx.beginPath();
-      ctx.moveTo(o[0], o[1]);
-      ctx.lineTo(e[0], e[1]);
-      ctx.stroke();
+      if (this.strokeSegment(ctx, vp, pane, [0, 0, 0], end, eye)) ctx.stroke();
     }
+  }
+
+  /**
+   * Adds a near-plane-clipped segment to the current path. Returns false when
+   * the segment lies entirely behind the eye.
+   */
+  private strokeSegment(
+    ctx: CanvasRenderingContext2D,
+    vp: Mat4,
+    pane: { x: number; y: number; w: number; h: number },
+    a: Vec3,
+    b: Vec3,
+    eye: Vec3,
+  ): boolean {
+    const near = 0.1;
+    let fx = this.orbit.target[0] - eye[0];
+    let fy = this.orbit.target[1] - eye[1];
+    let fz = this.orbit.target[2] - eye[2];
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    fx /= fl; fy /= fl; fz /= fl;
+    const da = (a[0] - eye[0]) * fx + (a[1] - eye[1]) * fy + (a[2] - eye[2]) * fz - near;
+    const db = (b[0] - eye[0]) * fx + (b[1] - eye[1]) * fy + (b[2] - eye[2]) * fz - near;
+    if (da < 0 && db < 0) return false;
+
+    let p0: Vec3 = a;
+    let p1: Vec3 = b;
+    if (da < 0 || db < 0) {
+      const t = da / (da - db);
+      const m: Vec3 = [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ];
+      if (da >= 0) p1 = m; else p0 = m;
+    }
+    const s0 = this.project(vp, p0, pane);
+    const s1 = this.project(vp, p1, pane);
+    if (!s0 || !s1) return false;
+    ctx.moveTo(s0[0], s0[1]);
+    ctx.lineTo(s1[0], s1[1]);
+    return true;
   }
 
   private drawLayer(

@@ -1,4 +1,4 @@
-import type { BodyDesc, EngineMeta, ShapeDesc, Vec3, WorldDesc } from '../core/types';
+import type { BodyDesc, EngineMeta, EngineStats, ShapeDesc, Vec3, WorldDesc } from '../core/types';
 import { PhysicsEngineBase } from './base';
 import { adaptShape, massOf, quatOr, shapeAabb } from './shared';
 
@@ -403,10 +403,14 @@ class PhysX5Engine extends PhysicsEngineBase {
     } catch { /* ignore */ }
   }
 
-  stats() {
+  stats(): EngineStats {
     return {
       bodyCount: this.actors.length,
       memoryBytes: (this.P as any)?.HEAPU8?.byteLength ?? undefined,
+      notes: {
+        memoryBytes:
+          'embind 只暴露 wasm 堆容量（HEAPU8.byteLength），不是使用量——这个构建的堆尺寸固定，所以它不会随场景变化',
+      },
     };
   }
 

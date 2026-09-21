@@ -1,4 +1,4 @@
-import type { EngineMeta, ShapeDesc, Vec3, WorldDesc } from '../core/types';
+import type { EngineMeta, EngineStats, ShapeDesc, Vec3, WorldDesc } from '../core/types';
 import { PhysicsEngineBase } from './base';
 import { adaptShape, massOf, quatOr, shapeAabb } from './shared';
 
@@ -319,8 +319,23 @@ class BulletEngine extends PhysicsEngineBase {
     try { b.applyCentralImpulse(this.v3(...impulse)); } catch { /* ignore */ }
   }
 
-  stats() {
-    return { bodyCount: this.bodies.length };
+  stats(): EngineStats {
+    const out: EngineStats = {
+      bodyCount: this.bodies.length,
+      notes: {
+        memoryBytes: 'asm.js 构建，堆由宿主 JS 引擎管理，拿不到可与 wasm 引擎对比的独立数字',
+      },
+    };
+    // getNumManifolds() is the ammo spelling of "how many contact manifolds is
+    // the solver chewing on this step" - the fairest workload cross-check
+    // against the other engines' body counts.
+    try {
+      const n = (this.world as unknown as { getNumManifolds?: () => number } | null)?.getNumManifolds?.();
+      if (typeof n === 'number' && Number.isFinite(n)) out.contactCount = n;
+    } catch {
+      // Binding without that method: report nothing rather than zero.
+    }
+    return out;
   }
 
   protected disposeWorld(): void {

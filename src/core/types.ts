@@ -134,6 +134,25 @@ export interface EngineStats {
   memoryBytes?: number;
   /** Number of native bodies actually allocated. */
   bodyCount?: number;
+  /** Collision shapes retained by the engine (usually one per body). */
+  shapeCount?: number;
+  /** Active contact pairs in the last step, when the engine exposes them. */
+  contactCount?: number;
+  /** Constraints/joints that were actually created. */
+  jointCount?: number;
+  /** Solver iteration counts, e.g. `{ velocity: 4, position: 1 }`. */
+  solverIterations?: Record<string, number>;
+  /** Per-phase cost of the last step, when the engine can attribute it. */
+  stepPhasesMs?: Record<string, number>;
+  /**
+   * Caveats keyed by field name.
+   *
+   * A missing figure must never be read as zero: every engine that cannot
+   * measure something says so here, and the panel prints that instead of a
+   * number. Reporting a page-wide JS heap as if it were solver memory is
+   * exactly the kind of thing this lab exists to avoid.
+   */
+  notes?: Record<string, string>;
 }
 
 export interface IPhysicsEngine {
