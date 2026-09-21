@@ -1,0 +1,1170 @@
+[
+  {
+    "engineId": "rapier3d",
+    "engineName": "Rapier 3D",
+    "language": "Rust",
+    "backend": "WASM",
+    "bootMs": 9.129999995231628,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 19,
+    "failCount": 0,
+    "degradedCount": 0
+  },
+  {
+    "engineId": "jolt",
+    "engineName": "Jolt Physics",
+    "language": "C++",
+    "backend": "WASM",
+    "bootMs": 197.60999999940395,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cone→凸包"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（Jolt: 本次集成下约束不生效，关节场景按自由刚体运行）"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（Jolt: 本次集成下约束不生效，关节场景按自由刚体运行）"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（Jolt: 本次集成下约束不生效，关节场景按自由刚体运行）"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（Jolt: 本次集成下约束不生效，关节场景按自由刚体运行）"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（Jolt: 本次集成下约束不生效，关节场景按自由刚体运行）"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 13,
+    "failCount": 0,
+    "degradedCount": 6
+  },
+  {
+    "engineId": "physx5",
+    "engineName": "NVIDIA PhysX 5",
+    "language": "C++",
+    "backend": "WASM",
+    "bootMs": 179.0949999988079,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cylinder→凸包 凸包→盒"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cone→凸包 凸包→盒"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但凸包→盒"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但凸包→盒"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但复合体→盒"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 14,
+    "failCount": 0,
+    "degradedCount": 5
+  },
+  {
+    "engineId": "bullet",
+    "engineName": "Bullet (ammo.js)",
+    "language": "C++",
+    "backend": "asm.js",
+    "bootMs": 81.37000000476837,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但复合体→盒"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（关节被跳过）"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "degraded",
+        "detail": "引擎未上报休眠状态"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 16,
+    "failCount": 0,
+    "degradedCount": 3
+  },
+  {
+    "engineId": "havok",
+    "engineName": "Havok",
+    "language": "C++",
+    "backend": "WASM",
+    "bootMs": 29.125,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cone→凸包"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但复合体→盒"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "通过，但Havok 距离约束用 LINEAR_DISTANCE 轴模拟"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 16,
+    "failCount": 0,
+    "degradedCount": 3
+  },
+  {
+    "engineId": "crashcat",
+    "engineName": "Crashcat",
+    "language": "TypeScript",
+    "backend": "Pure JS",
+    "bootMs": 20.969999998807907,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cone→凸包"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 18,
+    "failCount": 0,
+    "degradedCount": 1
+  },
+  {
+    "engineId": "cannon-es",
+    "engineName": "cannon-es",
+    "language": "TypeScript",
+    "backend": "Pure JS",
+    "bootMs": 7.364999994635582,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但capsule→凸包"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（关节被跳过）"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 17,
+    "failCount": 0,
+    "degradedCount": 2
+  },
+  {
+    "engineId": "oimo",
+    "engineName": "Oimo.js",
+    "language": "JavaScript",
+    "backend": "Pure JS",
+    "bootMs": 8.144999995827675,
+    "bootOk": true,
+    "results": [
+      {
+        "probeId": "shape-sphere",
+        "probeName": "球体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-box",
+        "probeName": "盒体下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-capsule",
+        "probeName": "胶囊下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但capsule→凸包 凸包→盒"
+      },
+      {
+        "probeId": "shape-cylinder",
+        "probeName": "圆柱下落静止",
+        "group": "形状",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "shape-cone",
+        "probeName": "圆锥下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但cone→凸包 凸包→盒"
+      },
+      {
+        "probeId": "shape-convex",
+        "probeName": "凸包下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但凸包→盒"
+      },
+      {
+        "probeId": "shape-wide-hull",
+        "probeName": "32 点凸包",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但凸包→盒"
+      },
+      {
+        "probeId": "shape-compound",
+        "probeName": "复合体下落静止",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但复合体→盒"
+      },
+      {
+        "probeId": "shape-trimesh",
+        "probeName": "三角网地形承载",
+        "group": "形状",
+        "status": "degraded",
+        "detail": "通过，但三角网→盒"
+      },
+      {
+        "probeId": "joint-spherical",
+        "probeName": "球形铰链悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-revolute",
+        "probeName": "转动关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-fixed",
+        "probeName": "固定关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（关节被跳过）"
+      },
+      {
+        "probeId": "joint-prismatic",
+        "probeName": "棱柱关节悬挂",
+        "group": "约束",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "joint-distance",
+        "probeName": "距离关节悬挂",
+        "group": "约束",
+        "status": "degraded",
+        "detail": "引擎不支持该约束（关节被跳过）"
+      },
+      {
+        "probeId": "stability-stack",
+        "probeName": "5 层堆叠不塌陷",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-ccd",
+        "probeName": "CCD 挡住高速弹丸",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-sleep",
+        "probeName": "静置后进入休眠",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-energy",
+        "probeName": "自由落体无异常增益",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      },
+      {
+        "probeId": "stability-distinct",
+        "probeName": "刚体位姿互不相同",
+        "group": "稳定性",
+        "status": "pass",
+        "detail": "通过"
+      }
+    ],
+    "passCount": 11,
+    "failCount": 0,
+    "degradedCount": 8
+  }
+]

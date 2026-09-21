@@ -1,0 +1,7 @@
+node_modules/
+dist/
+wasm-bridge/target/
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db

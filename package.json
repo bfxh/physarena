@@ -1,0 +1,37 @@
+{
+  "name": "physarena",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PhysArena - browser physics engine benchmark lab: 9 engines (incl. vxl-phys), 40 scenarios, hot-swap comparison",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "predev": "node scripts/vendor.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/vendor.mjs",
+    "build": "vite build",
+    "build:vxl": "node scripts/build-vxl-wasm.mjs",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4173",
+    "drive:selftest": "node scripts/arena-drive.mjs selftest",
+    "drive:bench": "node scripts/arena-drive.mjs bench",
+    "probe:jolt": "node scripts/probe-jolt-bodyid.mjs",
+    "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs"
+  },
+  "dependencies": {
+    "@babylonjs/havok": "^1.3.14",
+    "@dimforge/rapier3d-compat": "^0.20.0",
+    "ammojs-typed": "^1.0.6",
+    "cannon-es": "^0.20.0",
+    "crashcat": "^0.0.5",
+    "jolt-physics": "^1.1.0",
+    "oimo": "^1.0.9",
+    "physx-js-webidl": "^2.7.3",
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}
