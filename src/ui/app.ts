@@ -271,7 +271,11 @@ export class App {
    */
   private async bootRenderer(id: string): Promise<void> {
     const entry = rendererById(this.renderers, id);
-    const engine = await entry.boot(this.els.stage);
+    // A renderer whose init never settles must not freeze the whole app. The
+    // WebGPU backend is exactly that case on headless hardware: its adapter
+    // request hangs rather than failing, so without this the user could not
+    // even switch back to a working renderer.
+    const engine = await withTimeout(entry.boot(this.els.stage), 15000, entry.meta.name);
     engine.onResize = () => this.layoutOverlay();
     engine.onContextLost = () => {
       this.showOverlay(
@@ -1233,7 +1237,8 @@ export class App {
       /** Diagnostic: per-layer instance matrix decomposition. */
       renderProbe: () => this.viewport.probe(),
       /** Renderer axis, scriptable: list / read current / hot-swap. */
-      listRenderers: () => this.renderers.map((r) => r.meta),
+      listRenderers: () =>
+        this.renderers.map((r) => ({ ...r.meta, unavailable: r.unavailable ?? null })),
       currentRenderer: () => this.rendererId,
       selectRenderer: (id: string) => this.setRenderer(id),
       rendererStats: () => this.viewport.stats(),

@@ -2,6 +2,7 @@ import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { cachedGeometryData, instanceColors, signature, type GeometryData } from '../geometry';
 import { slotGrid } from '../layout';
 import { OrbitCamera, axisLines, floorLines, renderable, r2, r3 } from '../glCommon';
+import { withTimeout } from '../../core/guard';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
 } from '../types';
@@ -42,7 +43,26 @@ export const meta: RenderEngineMeta = {
 export function availability(): string | undefined {
   if (typeof navigator === 'undefined') return '不在浏览器环境';
   if (!(navigator as unknown as { gpu?: unknown }).gpu) {
-    return '此浏览器未启用 WebGPU（navigator.gpu 不存在）。Chrome 需要 113+ 且未被策略关闭，无头模式还需 --enable-unsafe-webgpu。';
+    return '此浏览器未启用 WebGPU（navigator.gpu 不存在）。Chrome 需要 113+ 且未被策略关闭。';
+  }
+
+  // Opt-in by default, and the reason is a measurement rather than caution.
+  //
+  // On a software-rasterised Chrome (SwiftShader - which is what a headless
+  // browser uses), `gpu.requestAdapter()` does not reject and does not even
+  // await: it **blocks the main thread**. A setTimeout-based guard cannot fire,
+  // because the event loop never runs. The tab is simply frozen, with no error
+  // and no way to switch to another renderer.
+  //
+  // Two signals were tried and neither is dependable: `navigator.webdriver` is
+  // not set in this harness, and the WebGL renderer string did not match a
+  // software-rasteriser pattern here either. Rather than guess, the backend is
+  // off unless the user explicitly opts in with ?allowWebGPU=1 - which also
+  // documents the risk at exactly the moment it matters.
+  const optedIn = new URLSearchParams(location.search).get('allowWebGPU') === '1';
+  if (!optedIn) {
+    return '默认禁用：在无头或软件渲染的环境里，WebGPU 的 requestAdapter 会阻塞主线程而不是报错，页面会直接冻结且无法切回。' +
+      '确认你的浏览器有硬件加速后，用 ?allowWebGPU=1 打开本页即可启用。';
   }
   return undefined;
 }
@@ -366,9 +386,18 @@ export class WebGpuRenderEngine implements IRenderEngine {
     const reason = availability();
     if (reason) throw new Error(reason);
     const gpu = (navigator as unknown as { gpu: GPUAny }).gpu;
-    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+    const adapter = await withTimeout<GPUAny>(
+      gpu.requestAdapter({ powerPreference: 'high-performance' }),
+      6000,
+      'WebGPU 适配器请求超时（6 秒）。在无头或软件渲染的浏览器上 requestAdapter 会一直挂起而不报错，' +
+      '这里主动放弃以免整个页面失去响应。',
+    );
     if (!adapter) throw new Error('WebGPU 可用但取不到适配器（可能是软件渲染被禁用）。');
-    const device = await adapter.requestDevice();
+    const device = await withTimeout<GPUAny>(
+      adapter.requestDevice(),
+      6000,
+      'WebGPU 设备请求超时（6 秒）。',
+    );
     this.device = device;
 
     const canvas = document.createElement('canvas');

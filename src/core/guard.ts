@@ -272,3 +272,36 @@ export class FrameWatchdog {
     this.worstAt = 0;
   }
 }
+
+/**
+ * Bounds a promise that crosses into an API which can simply never settle.
+ *
+ * WebGPU is the case that forced this: `requestAdapter()` on a headless or
+ * software-rendered Chrome does not reject, it hangs - the page sits there with
+ * no error, no spinner and no way to switch renderer. A timeout turns "the tab
+ * is frozen" into a message the user can act on.
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(message));
+    }, ms);
+    p.then(
+      (v) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
