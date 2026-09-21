@@ -111,36 +111,43 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 
 ---
 
-## 10 个渲染引擎
+## 10 个渲染引擎（8 个当前可用）
 
 渲染后端本身也是被比较的对象。同一个物理世界，十种画法：
 
-| 渲染器 | 语言 | 后端 | 许可 | chunk | 特点 |
-|---|---|---|---|---|---|
-| **three.js** | JavaScript | WebGL2 | MIT | 372 KB | 最主流的 WebGL 封装，`InstancedMesh` + Lambert |
-| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 5922 KB | 功能最全的框架，thin instance + 内置相机 / 材质 / 多视口 |
-| **原生 WebGPU** | WGSL | WebGPU | MIT | 13 KB | 下一代 API：显式管线状态、WGSL、命令编码器 |
-| **原生 WebGL2** | GLSL | WebGL2 | MIT | 15 KB | 手写 mat4、顶点属性分频、自己管 VAO 与实例缓冲 |
-| **原生 WebGL1** | GLSL | WebGL1 | MIT | 12 KB | 上一代 API：GLSL 100、无 VAO、实例化靠 ANGLE 扩展 |
-| **点云** | GLSL | WebGL2 | MIT | 9 KB | 每个刚体一个顶点，一次 `drawArrays` 画完整个场景 |
-| **线框** | GLSL | WebGL2 | MIT | 9 KB | 去重后的边，顶点吞吐翻三倍、像素填充降到几乎为零 |
-| **Canvas2D 软件投影** | TypeScript | Canvas2D | MIT | 13 KB | 完全不用 GPU：CPU 投影 + 背面剔除 + 画家算法 |
-| **SVG 多边形** | TypeScript | Software | MIT | 8 KB | 每个三角形一个 `<polygon>` 元素，DOM 后端的下限 |
-| **CSS 3D 合成** | TypeScript | Software | MIT | 7 KB | 每个刚体一个 `div`，透视与排序交给浏览器合成器 |
+| 渲染器 | 语言 | 后端 | 许可 | chunk | 状态 | 特点 |
+|---|---|---|---|---|---|---|
+| **three.js** | JavaScript | WebGL2 | MIT | 372 KB | 可用 | 最主流的 WebGL 封装，`InstancedMesh` + Lambert |
+| **原生 WebGL2** | GLSL | WebGL2 | MIT | 15 KB | 可用 | 手写 mat4、顶点属性分频、自己管 VAO 与实例缓冲 |
+| **原生 WebGL1** | GLSL | WebGL1 | MIT | 12 KB | 可用 | 上一代 API：GLSL 100、无 VAO、实例化靠 ANGLE 扩展 |
+| **点云** | GLSL | WebGL2 | MIT | 9 KB | 可用 | 每个刚体一个顶点，一次 `drawArrays` 画完整个场景 |
+| **线框** | GLSL | WebGL2 | MIT | 9 KB | 可用 | 去重后的边，顶点吞吐翻三倍、像素填充降到几乎为零 |
+| **Canvas2D 软件投影** | TypeScript | Canvas2D | MIT | 13 KB | 可用 | 完全不用 GPU：CPU 投影 + 背面剔除 + 画家算法 |
+| **SVG 多边形** | TypeScript | Software | MIT | 8 KB | 可用 | 每个三角形一个 `<polygon>` 元素，DOM 后端的下限 |
+| **CSS 3D 合成** | TypeScript | Software | MIT | 7 KB | 可用 | 每个刚体一个 `div`，透视与排序交给浏览器合成器 |
+| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 5922 KB | **禁用** | 功能最全的框架。当前版本不渲染几何，见下文 |
+| **原生 WebGPU** | WGSL | WebGPU | MIT | 13 KB | **禁用** | 下一代 API。在无头/软件渲染环境下会阻塞主线程，见下文 |
 
-**框架税一目了然**：Babylon 5922 KB、three 372 KB，而八个手写后端全部在 7–15 KB。全部是懒加载 chunk，选中哪个才下载哪个。
+**两个后端为什么是禁用的。** 它们都留在列表里（禁用 + 写明原因），因为「你的环境跑不了这个」和「这个后端有问题」都是事实，不该表现为一个不存在的渲染器。点击被禁用的卡片会弹出原因。
+
+- **WebGPU**：在软件渲染（SwiftShader，也就是无头浏览器走的那条路）下，`requestAdapter()` **既不 reject 也不 await——它阻塞主线程**。基于 `setTimeout` 的超时守卫根本不会触发（事件循环压根没在跑），页面直接冻结，连切回其他渲染器都做不到。试过 `navigator.webdriver` 和 WebGL 的 renderer 字符串两个信号，都不足以判断，所以改成**默认禁用 + `?allowWebGPU=1` 显式启用**，并保留 6 秒适配器超时作为第二道防线。
+- **Babylon.js**：能确认的运行时状态**全部正常**——画布尺寸 702×459、`scene.render()` 确实执行（把清屏色临时改成品红，画布读回的就是那个品红）、`scene.isReady() === true`、两个网格 `isReady(true) === true` 且 `materialReady === true`、`getActiveMeshes().length === 2`、layerMask 与相机匹配、thin instance 计数为 1 和 40。**但画面里只有清屏色。** 已逐个排除：`runRenderLoop` 空循环（删掉后不再提交空帧，是它让面板看起来 100% 空白）、`preserveDrawingBuffer`、手动 `engine.clear()` 与 `scene.autoClear` 的组合、显式 `camera.viewport`。用 `?allowBabylon=1` 可启用继续排查。
+
+**框架税一目了然**：Babylon 5922 KB、three 372 KB，而其余八个手写后端全部在 7–15 KB。全部是懒加载 chunk，选中哪个才下载哪个。
 
 **中间那六个后端不是凑数，每一个都在回答一个具体问题**：点云给出「保真度换速度」的上界；线框分离顶点吞吐与像素填充；WebGL1 量出 VAO 和核心实例化省掉了多少；SVG 与 CSS 3D 探 DOM 后端的天花板；WebGPU 则是同一件事用显式管线再做一遍。
 
 ![渲染后端对比](docs/renderer-matrix.png)
 
+（对比图只有 8 个可用后端；禁用两个放上去只会是一格空白，那是干扰而不是信息。）
+
 四点值得说明：
 
 **几何是共享的。** 每个后端都消费同一份引擎无关的三角形数据（`src/render/geometry.ts`），所以换后端不会换网格——画面差异只可能来自管线本身。
 
-**相机是共享的。** 四个手写 GL 后端共用 `src/render/glCommon.ts` 里的同一份取景与轨道相机代码；框架后端的取景公式也逐系数对齐，实测同一场景下相机位置完全相同（`[7.03, 15.68, 8.72]`）。框架各自的相机约定不同（Babylon 的 `alpha` 从 +X 量起而非 +Z），照搬会得到镜像视角。
+**相机是共享的。** 四个手写 GL 后端共用 `src/render/glCommon.ts` 里的同一份取景与轨道相机代码；实测同一场景下相机位置逐位一致（`[7.03, 15.68, 8.72]`）。
 
-**环境跑不了的会说明原因，不会消失。** WebGPU 在没启用的浏览器里仍然出现在列表中，显示为禁用并附上原因——「你的浏览器跑不了这个」是关于环境的事实，不是一个不存在的渲染器。
+**环境跑不了的会说明原因，不会消失。** 见上文两个禁用后端。
 
 **软件光栅的两道守卫**：三角形预算（9000/帧）与实例预算（420），超限时降质量而不是掉帧。地面用「地平线填充 + 线段近平面裁剪」绘制——140 m 的平面在任何可用机位下都有角点落在相机背后，直接投影会整块消失。
 

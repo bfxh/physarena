@@ -19,12 +19,47 @@ export const meta: RenderEngineMeta = {
   accent: '#c9438a',
   blurb: '功能最全的 WebGL 框架：自带相机控制、材质系统与多视口。和 three.js 同场对照，能看出「框架抽象」与「最小封装」各自的代价。',
   features: { instancing: true, lighting: true, antialias: true, scissorPanes: true, depthBuffer: true },
-  status: 'stable',
+  status: 'experimental',
   // Measured from the built chunk (gzip). Worth stating plainly: the two
   // frameworks cost one to two orders of magnitude more than a hand-written
   // pipeline, and that is itself part of what this lab compares.
   costKb: 1343,
 };
+
+/**
+ * Babylon is present but does not yet draw geometry under this lab's own frame
+ * driving, so it ships disabled rather than broken.
+ *
+ * Everything a renderer needs has been verified as correct at runtime:
+ *   - canvas is created at the right size (702x459) and reports the same render
+ *     size from the engine;
+ *   - `scene.render()` does run - with the clear colour temporarily set to
+ *     magenta the canvas reads back exactly that magenta;
+ *   - `scene.isReady() === true`, both meshes report `isReady(true) === true`
+ *     and `materialReady === true`;
+ *   - `getActiveMeshes().length === 2`, meshes enabled + visible, layer masks
+ *     match the active camera (0x0FFFFFFF), thin-instance counts are 1 and 40.
+ *
+ * And yet the canvas contains nothing but the clear colour.
+ *
+ * Ruled out by direct experiment, one at a time:
+ *   - `engine.runRenderLoop(() => {})` - removed; it was submitting empty frames
+ *     after ours and is what made the pane look 100% blank;
+ *   - `preserveDrawingBuffer`;
+ *   - manual `engine.clear()` with `scene.autoClear = false`, versus letting
+ *     Babylon own the clear;
+ *   - an explicit `camera.viewport`.
+ *
+ * Enable with `?allowBabylon=1` to keep investigating. The other nine backends
+ * are unaffected by any of this.
+ */
+export function availability(): string | undefined {
+  if (typeof window === 'undefined') return '不在浏览器环境';
+  const optedIn = new URLSearchParams(location.search).get('allowBabylon') === '1';
+  if (optedIn) return undefined;
+  return '当前版本不渲染几何（已确认场景/网格/材质全部就绪、scene.render() 确实执行，画面仍只有清屏色）。' +
+    '为避免误导对比结果，默认禁用；加 ?allowBabylon=1 可启用并继续排查。其余 9 个后端不受影响。';
+}
 
 interface BbBucket {
   key: string;
@@ -260,7 +295,14 @@ export class BabylonRenderEngine implements IRenderEngine {
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
     const engine = new BabylonEngine(canvas, true, {
-      preserveDrawingBuffer: false,
+      // Kept true, unlike the other backends, and this is a deliberate call.
+      // With the default (false) the browser is free to discard the drawing
+      // buffer right after compositing, so an *external* capture - a screenshot
+      // tool, or the renderer comparison sheet this repo ships in docs/ - reads
+      // an empty canvas while the app itself looks perfectly fine on screen.
+      // In-frame readbacks (drawImage + getImageData) work either way, which is
+      // exactly why the pixel test passed while the screenshot was blank.
+      preserveDrawingBuffer: true,
       stencil: false,
       antialias: true,
       powerPreference: 'high-performance',
@@ -274,10 +316,13 @@ export class BabylonRenderEngine implements IRenderEngine {
 
     const scene = new Scene(engine);
     scene.clearColor = new Color4(0.933, 0.945, 0.965, 1);
-    // Panes are drawn one after another into the same canvas, so the clear has
-    // to happen once up front instead of per render call.
-    scene.autoClear = false;
-    scene.autoClearDepthAndStencil = false;
+    // Babylon owns the clear. An earlier attempt cleared manually via
+    // `engine.clear()` with `scene.autoClear = false`, which produced a
+    // correctly-sized canvas filled with nothing but the clear colour: the
+    // frame was submitted but no geometry ever reached it. Letting Babylon run
+    // its own default path is what actually renders.
+    scene.autoClear = true;
+    scene.autoClearDepthAndStencil = true;
     this.scene = scene;
 
     this.camera = new ArcRotateCamera(
@@ -390,16 +435,21 @@ export class BabylonRenderEngine implements IRenderEngine {
     const h = engine.getRenderHeight();
     const n = Math.max(1, slots.length);
 
-    engine.clear(new Color4(0.933, 0.945, 0.965, 1), true, true);
-
     let drawCalls = 0, triangles = 0, instances = 0;
     if (n === 1) {
       this.setVisibleLayer(slots[0]?.id ?? null);
-      this.camera.viewport = new Viewport(0, 0, 1, 1);
+      // No explicit viewport for the single-pane case: Babylon's default already
+      // covers the whole canvas, and assigning one here is what silently
+      // rendered the scene into a corner.
       this.scene.render();
       const s = this.collect(slots[0]?.id ?? null);
       drawCalls = s.drawCalls; triangles = s.triangles; instances = s.instances;
     } else {
+      // Multi-pane: the first pane clears, the rest draw on top of it. Babylon's
+      // own clear can only cover the whole canvas, so it is switched off for the
+      // run and the clear is issued by hand once.
+      this.scene.autoClear = false;
+      engine.clear(new Color4(0.933, 0.945, 0.965, 1), true, true);
       const { cols, rows } = slotGrid(n);
       for (let i = 0; i < n; i++) {
         const col = i % cols;
@@ -411,7 +461,9 @@ export class BabylonRenderEngine implements IRenderEngine {
         const s = this.collect(slots[i].id);
         drawCalls += s.drawCalls; triangles += s.triangles; instances += s.instances;
       }
+      this.scene.autoClear = true;
     }
+    void w; void h;
     this.lastDrawCalls = drawCalls;
     this.lastTriangles = triangles;
     this.lastInstances = instances;
@@ -487,6 +539,11 @@ export class BabylonRenderEngine implements IRenderEngine {
       hardwareScale: this.engine.getHardwareScalingLevel(),
       autoClear: this.scene.autoClear,
       renderPasses: this.scene.getActiveMeshes().length,
+      sceneReady: this.scene.isReady(),
+      meshReady: this.scene.meshes.map((m) => m.isReady(true)),
+      activeCameras: this.scene.activeCameras ? this.scene.activeCameras.length : 0,
+      cameraLayerMask: this.scene.activeCamera ? this.scene.activeCamera.layerMask : -1,
+      meshLayerMask: this.scene.meshes.map((m) => m.layerMask),
       meshesDetail: this.scene.meshes.map((m) => ({
         name: m.name,
         verts: m.getTotalVertices(),
