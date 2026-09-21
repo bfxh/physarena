@@ -1,6 +1,7 @@
 import {
   ArcRotateCamera, Color3, Color4, DirectionalLight, Engine as BabylonEngine,
-  HemisphericLight, Mesh, Scene, StandardMaterial, Vector3, VertexData, Viewport,
+  HemisphericLight, InstancedMesh, Mesh, Quaternion, Scene, StandardMaterial,
+  Vector3, VertexData, Viewport,
 } from '@babylonjs/core';
 import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { cachedGeometryData, instanceColors, signature, type GeometryData } from '../geometry';
@@ -19,53 +20,21 @@ export const meta: RenderEngineMeta = {
   accent: '#c9438a',
   blurb: '功能最全的 WebGL 框架：自带相机控制、材质系统与多视口。和 three.js 同场对照，能看出「框架抽象」与「最小封装」各自的代价。',
   features: { instancing: true, lighting: true, antialias: true, scissorPanes: true, depthBuffer: true },
-  status: 'experimental',
+  status: 'stable',
   // Measured from the built chunk (gzip). Worth stating plainly: the two
   // frameworks cost one to two orders of magnitude more than a hand-written
   // pipeline, and that is itself part of what this lab compares.
   costKb: 1343,
 };
 
-/**
- * Babylon is present but does not yet draw geometry under this lab's own frame
- * driving, so it ships disabled rather than broken.
- *
- * Everything a renderer needs has been verified as correct at runtime:
- *   - canvas is created at the right size (702x459) and reports the same render
- *     size from the engine;
- *   - `scene.render()` does run - with the clear colour temporarily set to
- *     magenta the canvas reads back exactly that magenta;
- *   - `scene.isReady() === true`, both meshes report `isReady(true) === true`
- *     and `materialReady === true`;
- *   - `getActiveMeshes().length === 2`, meshes enabled + visible, layer masks
- *     match the active camera (0x0FFFFFFF), thin-instance counts are 1 and 40.
- *
- * And yet the canvas contains nothing but the clear colour.
- *
- * Ruled out by direct experiment, one at a time:
- *   - `engine.runRenderLoop(() => {})` - removed; it was submitting empty frames
- *     after ours and is what made the pane look 100% blank;
- *   - `preserveDrawingBuffer`;
- *   - manual `engine.clear()` with `scene.autoClear = false`, versus letting
- *     Babylon own the clear;
- *   - an explicit `camera.viewport`.
- *
- * Enable with `?allowBabylon=1` to keep investigating. The other nine backends
- * are unaffected by any of this.
- */
-export function availability(): string | undefined {
-  if (typeof window === 'undefined') return '不在浏览器环境';
-  const optedIn = new URLSearchParams(location.search).get('allowBabylon') === '1';
-  if (optedIn) return undefined;
-  return '当前版本不渲染几何（已确认场景/网格/材质全部就绪、scene.render() 确实执行，画面仍只有清屏色）。' +
-    '为避免误导对比结果，默认禁用；加 ?allowBabylon=1 可启用并继续排查。其余 9 个后端不受影响。';
-}
-
 interface BbBucket {
   key: string;
+  /** The source mesh; instances are created from it. Never drawn itself. */
   mesh: Mesh;
   count: number;
   indices: number[];
+  /** One InstancedMesh per body, in `indices` order. */
+  instances: InstancedMesh[];
   /** Flat 16-float matrices, CPU-side so probe() works like the other backends. */
   matrices: Float32Array;
   /** RGBA per instance, matching the thin-instance colour buffer. */
@@ -114,23 +83,39 @@ export class BabylonLayer implements IRenderLayer {
       mat.backFaceCulling = true;
       mesh.material = mat;
       mesh.isPickable = false;
+      // The source mesh is only a template; every body is one instance of it.
+      mesh.setEnabled(false);
 
-      // Thin instances: one buffer for transforms, one for per-instance colour.
-      // This is Babylon's equivalent of InstancedMesh / instanced attributes.
+      // Per-instance colour has to be registered *before* the instances exist.
+      // The buffer name matters: StandardMaterial looks for exactly "color" and
+      // wires it into its diffuse path automatically.
+      mesh.registerInstancedBuffer('color', 4);
+
       const matrices = new Float32Array(n * 16);
       const rgba = new Float32Array(n * 4);
       const rgb = instanceColors(bodies, bucket.indices);
+      const instances: InstancedMesh[] = [];
       for (let k = 0; k < n; k++) {
         rgba[k * 4] = rgb[k * 3];
         rgba[k * 4 + 1] = rgb[k * 3 + 1];
         rgba[k * 4 + 2] = rgb[k * 3 + 2];
         rgba[k * 4 + 3] = 1;
-      }
-      mesh.thinInstanceSetBuffer('matrix', matrices, 16);
-      mesh.thinInstanceSetBuffer('color', rgba, 4);
-      mesh.alwaysSelectAsActiveMesh = true;
 
-      this.buckets.push({ key, mesh, count: n, indices: bucket.indices, matrices, colors: rgba, material: mat });
+        // InstancedMesh, not thin instances. Thin instances rendered correctly
+        // in isolation but produced nothing here under the host-driven frame
+        // loop, and every state check (isReady, hasThinInstances, instance
+        // count, bounding info, layer masks) reported green. createInstance is
+        // Babylon's standard path and needs no shader-define juggling.
+        const inst = mesh.createInstance(`pa-${this.id}-${key}-i${k}`);
+        inst.isPickable = false;
+        inst.alwaysSelectAsActiveMesh = true;
+        inst.instancedBuffers.color = new Color4(rgba[k * 4], rgba[k * 4 + 1], rgba[k * 4 + 2], 1);
+        instances.push(inst);
+      }
+
+      this.buckets.push({
+        key, mesh, count: n, indices: bucket.indices, instances, matrices, colors: rgba, material: mat,
+      });
     }
   }
 
@@ -141,19 +126,33 @@ export class BabylonLayer implements IRenderLayer {
       for (let k = 0; k < b.count; k++) {
         const o = k * 16;
         const s = states[b.indices[k]];
+        const inst = b.instances[k];
         if (!s || !renderable(s, huge)) {
           m.fill(0, o, o + 16);
+          // Collapsed rather than disabled: visibility is owned by
+          // setVisible(), and two writers fighting over setEnabled() left
+          // panes showing the wrong layer.
+          inst.scaling.setAll(0);
           continue;
         }
+        inst.scaling.setAll(1);
+        // Assigned through Babylon's own types rather than a raw matrix, which
+        // removes the row/column-major question entirely.
+        inst.position.set(s.position[0], s.position[1], s.position[2]);
+        if (!inst.rotationQuaternion) inst.rotationQuaternion = new Quaternion(0, 0, 0, 1);
+        const q = s.rotation;
+        const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+        inst.rotationQuaternion.set(q[0] / l, q[1] / l, q[2] / l, q[3] / l);
+        // Kept in sync purely for probe(), so all backends report the same shape.
         writeInstanceMatrix(m, o, s);
       }
-      // The color buffer is static per scene; only the matrices move.
-      b.mesh.thinInstanceBufferUpdated('matrix');
     }
   }
 
   setVisible(on: boolean): void {
-    for (const b of this.buckets) b.mesh.setEnabled(on);
+    for (const b of this.buckets) {
+      for (const inst of b.instances) inst.setEnabled(on);
+    }
   }
 
   get instanceCount(): number {
@@ -230,6 +229,7 @@ export class BabylonLayer implements IRenderLayer {
 
   clear() {
     for (const b of this.buckets) {
+      for (const inst of b.instances) inst.dispose();
       b.mesh.dispose(false, false);
       b.material.dispose();
     }

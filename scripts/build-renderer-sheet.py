@@ -21,12 +21,13 @@ DOCS = os.path.join(ROOT, "docs")
 
 # id -> label; order is the sidebar order.
 #
-# Babylon and WebGPU are deliberately absent: neither currently produces a
-# picture (see README「渲染后端现状」), and a tile of empty background next to
-# eight working ones reads as a glitch rather than as information. Their status
-# is stated in the README instead.
+# WebGPU is deliberately absent: it is disabled by default because its adapter
+# request blocks the main thread on software-rendered browsers (see README
+# 「渲染后端现状」), so there is no screenshot to show. Its status is stated in
+# the README instead.
 TILES = [
     ("three", "three.js · WebGL2 · 372 KB"),
+    ("babylon", "Babylon.js · WebGL2 · 5922 KB"),
     ("webgl2", "原生 WebGL2 · GLSL · 15 KB"),
     ("webgl1", "原生 WebGL1 · GLSL 100 · 12 KB"),
     ("points", "点云 · gl.POINTS · 9 KB"),

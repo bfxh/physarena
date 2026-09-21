@@ -111,13 +111,14 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 
 ---
 
-## 10 个渲染引擎（8 个当前可用）
+## 10 个渲染引擎（9 个当前可用）
 
 渲染后端本身也是被比较的对象。同一个物理世界，十种画法：
 
 | 渲染器 | 语言 | 后端 | 许可 | chunk | 状态 | 特点 |
 |---|---|---|---|---|---|---|
 | **three.js** | JavaScript | WebGL2 | MIT | 372 KB | 可用 | 最主流的 WebGL 封装，`InstancedMesh` + Lambert |
+| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 5922 KB | 可用 | 功能最全的框架，`createInstance` + 内置相机 / 材质 / 多视口 |
 | **原生 WebGL2** | GLSL | WebGL2 | MIT | 15 KB | 可用 | 手写 mat4、顶点属性分频、自己管 VAO 与实例缓冲 |
 | **原生 WebGL1** | GLSL | WebGL1 | MIT | 12 KB | 可用 | 上一代 API：GLSL 100、无 VAO、实例化靠 ANGLE 扩展 |
 | **点云** | GLSL | WebGL2 | MIT | 9 KB | 可用 | 每个刚体一个顶点，一次 `drawArrays` 画完整个场景 |
@@ -125,13 +126,11 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 | **Canvas2D 软件投影** | TypeScript | Canvas2D | MIT | 13 KB | 可用 | 完全不用 GPU：CPU 投影 + 背面剔除 + 画家算法 |
 | **SVG 多边形** | TypeScript | Software | MIT | 8 KB | 可用 | 每个三角形一个 `<polygon>` 元素，DOM 后端的下限 |
 | **CSS 3D 合成** | TypeScript | Software | MIT | 7 KB | 可用 | 每个刚体一个 `div`，透视与排序交给浏览器合成器 |
-| **Babylon.js** | TypeScript | WebGL2 | Apache-2.0 | 5922 KB | **禁用** | 功能最全的框架。当前版本不渲染几何，见下文 |
 | **原生 WebGPU** | WGSL | WebGPU | MIT | 13 KB | **禁用** | 下一代 API。在无头/软件渲染环境下会阻塞主线程，见下文 |
 
-**两个后端为什么是禁用的。** 它们都留在列表里（禁用 + 写明原因），因为「你的环境跑不了这个」和「这个后端有问题」都是事实，不该表现为一个不存在的渲染器。点击被禁用的卡片会弹出原因。
+**为什么 WebGPU 是禁用的。** 它留在列表里（禁用 + 写明原因），因为「你的环境跑不了这个」是关于环境的事实，不该表现为一个不存在的渲染器。点击被禁用的卡片会弹出原因。
 
 - **WebGPU**：在软件渲染（SwiftShader，也就是无头浏览器走的那条路）下，`requestAdapter()` **既不 reject 也不 await——它阻塞主线程**。基于 `setTimeout` 的超时守卫根本不会触发（事件循环压根没在跑），页面直接冻结，连切回其他渲染器都做不到。试过 `navigator.webdriver` 和 WebGL 的 renderer 字符串两个信号，都不足以判断，所以改成**默认禁用 + `?allowWebGPU=1` 显式启用**，并保留 6 秒适配器超时作为第二道防线。
-- **Babylon.js**：能确认的运行时状态**全部正常**——画布尺寸 702×459、`scene.render()` 确实执行（把清屏色临时改成品红，画布读回的就是那个品红）、`scene.isReady() === true`、两个网格 `isReady(true) === true` 且 `materialReady === true`、`getActiveMeshes().length === 2`、layerMask 与相机匹配、thin instance 计数为 1 和 40。**但画面里只有清屏色。** 已逐个排除：`runRenderLoop` 空循环（删掉后不再提交空帧，是它让面板看起来 100% 空白）、`preserveDrawingBuffer`、手动 `engine.clear()` 与 `scene.autoClear` 的组合、显式 `camera.viewport`。用 `?allowBabylon=1` 可启用继续排查。
 
 **框架税一目了然**：Babylon 5922 KB、three 372 KB，而其余八个手写后端全部在 7–15 KB。全部是懒加载 chunk，选中哪个才下载哪个。
 
@@ -139,15 +138,15 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 
 ![渲染后端对比](docs/renderer-matrix.png)
 
-（对比图只有 8 个可用后端；禁用两个放上去只会是一格空白，那是干扰而不是信息。）
+（对比图 9 格；WebGPU 因为默认禁用没有截图。）
 
 四点值得说明：
 
 **几何是共享的。** 每个后端都消费同一份引擎无关的三角形数据（`src/render/geometry.ts`），所以换后端不会换网格——画面差异只可能来自管线本身。
 
-**相机是共享的。** 四个手写 GL 后端共用 `src/render/glCommon.ts` 里的同一份取景与轨道相机代码；实测同一场景下相机位置逐位一致（`[7.03, 15.68, 8.72]`）。
+**相机是共享的。** 四个手写 GL 后端共用 `src/render/glCommon.ts` 里的同一份取景与轨道相机代码，实测相机位置逐位一致（`[7.03, 15.68, 8.72]`）。
 
-**环境跑不了的会说明原因，不会消失。** 见上文两个禁用后端。
+**Babylon 那一格的背景比其他格略深。** 这不是 bug，是框架的色彩管理：Babylon 在输出阶段做线性→sRGB 转换，而手写后端直接把 sRGB 值写进缓冲。同一件事在框架里发生的位置不同，结果就不同——这本身也是「框架 vs 手写」的一部分。
 
 **软件光栅的两道守卫**：三角形预算（9000/帧）与实例预算（420），超限时降质量而不是掉帧。地面用「地平线填充 + 线段近平面裁剪」绘制——140 m 的平面在任何可用机位下都有角点落在相机背后，直接投影会整块消失。
 
@@ -487,12 +486,18 @@ interface IPhysicsEngine {
 
 | 症状 | 根因 | 修法 |
 |---|---|---|
-| **Babylon 面板完全空白**（切过去只有背景色），但 `renderProbe()` 报出 2 个 mesh / 40 个 thin instance / 材质 ready，`stats()` 也报出正确的三角形数——数据全对、画面全空 | init 里的 `engine.runRenderLoop(() => {})`。Babylon 的 runRenderLoop 会启动**它自己的** rAF 循环，每帧 `beginFrame()` → 空回调 → `endFrame()`，而 `endFrame()` **会交换后缓冲**。于是它在本实验画完一帧之后，紧接着又提交了一个空帧 | 删掉那行——渲染循环由宿主驱动，`scene.render()` 自己会完成 begin/end frame |
+| **Babylon 面板完全空白**（切过去只有背景色），但 `renderProbe()` 报出 2 个 mesh / 40 个 thin instance / 材质 ready，`stats()` 也报出正确的三角形数——数据全对、画面全空 | **两个原因叠在一起。** ① init 里的 `engine.runRenderLoop(() => {})`：它启动**自己的** rAF 循环，每帧 `beginFrame()` → 空回调 → `endFrame()`，而 `endFrame()` **会交换后缓冲**——于是它在本实验画完之后紧接着又提交了一个空帧。② 更深的一层是**thin instance 在「宿主驱动 rAF + 手动 `scene.render()`」这个组合下不渲染**：`hasThinInstances`、`thinInstanceCount`（1 和 40）、`scene.isReady()`、`mesh.isReady()`、`materialReady`、`getActiveMeshes().length`、layerMask、甚至显式 `thinInstanceRefreshBoundingInfo()` 全部正常，几何就是一个都不出现 | ①删掉那行，循环由宿主驱动；②把 thin instance 换成 Babylon 标准的 `createInstance` + `registerInstancedBuffer('color', 4)`，位姿直接赋 `inst.position` / `inst.rotationQuaternion`（顺带绕开了矩阵行列主序的坑）。修后 `scenePixels` 从 19 涨到 20139，9 格对比图全部有画面 |
 | **SVG 后端让整个标签页卡死**（切过去无响应，8 分钟不返回） | 每帧 `svg.innerHTML = parts.join('')`：24 刚体场景即约 138 KB 的 HTML 要重新解析，60 Hz 下是每秒数 MB 的解析量 | 双层节流：三角形预算 1400 → 360、实例预算 120 → 48，且每 4 帧才重建一次（约 15 fps）；首帧强制渲染不跳过 |
 | 并排对比下各后端 draw call 数差很多，看着像 bug | 三个 GL 后端按形状签名合批，`drawCalls` 是真实提交数；而 SVG / CSS 后端根本没有"绘制调用"这个概念 | 指标面板对缺少该概念的后端显示「—」加口径说明，绝不写 0 |
 | 宿主指标（视口 / 绘图缓冲）在 SVG 与 CSS 后端恒为「—」 | 指标只查 `document.querySelector('canvas')`，而这两个后端的绘制目标是 `<svg>` 和 `<div>` | 改查 `.pa-canvas`（三种元素类型都带这个类），并对没有独立绘图缓冲的后端说明原因 |
 
-**这一轮最值得记住的一条：数据对 ≠ 画面对。** Babylon 那次 `probe()` 全部正常——因为它读的是 CPU 侧数组，根本不经过 GPU。凡是渲染问题，最后一定要落到像素上验证：把 canvas `drawImage` 到临时 canvas 再 `getImageData` 稀疏采样，一眼就能拿到「100% 是背景色」这种决定性证据。这个检查现在是渲染器改动后的标准动作。
+**这一轮最值得记住的两条。**
+
+**一、数据对 ≠ 画面对。** Babylon 那次 `probe()` 全部正常——因为它读的是 CPU 侧数组，根本不经过 GPU。凡是渲染问题，最后一定要落到像素上验证：把 canvas `drawImage` 到临时 canvas 再 `getImageData` 稀疏采样，一眼就能拿到「只有一种颜色」这种决定性证据。
+
+**二、定位手法：放一个不参与实例化的普通 Mesh。** Babylon 排查到最后，真正让我在一步之内锁定方向的，是往场景里塞了一个**自发光、非实例化**的测试方块：它显示出来了，于是相机、材质、光栅化、包围盒、layerMask 这一大片怀疑范围一次性全部排除，问题被锁死在「实例化路径」上。这比逐个参数试快一个数量级。（顺带一提，同一手法也证明了 `scene.render()` 确实在执行：把清屏色临时改成品红，画布读回的就是那个品红。）
+
+**还有一条反过来的经验**：`drawImage` 读 WebGL canvas 在 `preserveDrawingBuffer: false` 时**本来就不可靠**（缓冲可能在合成后失效），所以「读到空白」不能直接等于「没画」——两个方向的证据都要取，交叉验证才不会误判。
 | 其余：Bullet 世界/scratch 泄漏、PhysX actor/shape/材质不释放、Havok 体先释放后移出世界、meshFactory 缓存键丢字段、导入模型 NaN 顶点、`RollingWindow` 注释与实现不符 | 见 `FIXPLAN.md` 台账 | 逐项修正 |
 
 **回归验证**：自检矩阵 **19 探针 × 8 引擎，0 失败**（`out/selftest-final.json`）；
