@@ -8,9 +8,10 @@ import { importedScenario } from '../scenarios/imported';
 import type { Scenario } from '../scenarios/types';
 import { slotRects } from '../render/layout';
 import { loadRenderers, rendererById, type RendererEntry } from '../render/registry';
-import type { IRenderEngine, RenderStats } from '../render/types';
+import type { IRenderEngine, RenderEngineMeta, RenderStats } from '../render/types';
 import { collectMetrics, metricsToRows, type MetricSection } from '../core/metrics';
 import { FrameWatchdog, Guards, type GuardKind } from '../core/guard';
+import { RollingWindow, summarize } from '../core/stats';
 import { clear, download, fmt, fmtBytes, h } from './dom';
 import { loadModelFile } from './importer';
 
@@ -58,6 +59,13 @@ export class App {
   private rendererStats: RenderStats = { drawCalls: 0, triangles: 0 };
   /** Wall-clock ms of the last successful renderer swap, shown in the panel. */
   private lastSwapMs = 0;
+  /**
+   * How long submitting a frame costs on the CPU, sampled every frame.
+   *
+   * Same rolling-window shape as the physics step timing, so the panel can put
+   * the two side by side and say which axis is eating the frame budget.
+   */
+  private renderWindow = new RollingWindow(240);
 
   private mode: Mode = 'sandbox';
   private scenario: Scenario = SCENARIOS[0];
@@ -341,8 +349,14 @@ export class App {
   private draw(): void {
     if (!this.viewport) return;
     const ids = this.activeIds();
+    const t0 = performance.now();
     this.viewport.render(ids.map((id) => ({ id, label: id })));
     this.viewport.updateCamera();
+    // Time to *issue* the frame - shader binding, uniform upload, command
+    // submission. Not GPU execution time, which no browser exposes without the
+    // (mostly disabled) timer-query extension. Both the field name and the
+    // panel label say "提交" so the number cannot be read as the wrong thing.
+    this.renderWindow.push(performance.now() - t0);
   }
 
   private setupDropTarget(stage: HTMLElement): void {
@@ -610,7 +624,13 @@ export class App {
     }
     this.updateHud();
     this.metricsAccum++;
-    if (this.metricsAccum % 12 === 0) this.updateMetrics();
+    if (this.metricsAccum % 12 === 0) {
+      // Sampled here rather than inside updateHud(): the counters walk every
+      // layer's buffers so they stay throttled, but the panel has to keep
+      // updating in bench mode too, where updateHud() returns early.
+      this.rendererStats = this.viewport.stats();
+      this.updateMetrics();
+    }
   };
 
   private metricsAccum = 0;
@@ -620,9 +640,6 @@ export class App {
     if (this.mode === 'bench') return;
     this.hudAccum++;
     if (this.hudAccum % 6 !== 0) return;
-    // Sampled with the HUD rather than every frame: the counters walk every
-    // layer's buffers, which is real work at 500 bodies.
-    this.rendererStats = this.viewport.stats();
     const ids = this.activeIds();
     const multi = ids.length > 1;
     const el = clear(this.els.hud);
@@ -836,6 +853,8 @@ export class App {
       renderFps: this.renderFps,
       fixedDt: this.fixedDt,
       rendererSwapMs: this.lastSwapMs,
+      renderTiming: summarize(this.renderWindow.values()),
+      gpuTimingNote: gpuTimingNote(),
       scenarioName: this.scenario.name,
       buildMs: sim?.buildMs,
       stateHash: sim ? this.guards.attempt(`hash:${id}`, () => sim.stateHash(), undefined) : undefined,
@@ -954,6 +973,7 @@ export class App {
     const slot = this.slot(this.activeIds()[0] ?? '');
     const meta: EngineMeta | undefined = slot?.entry.meta;
     const sim = slot?.sim ?? null;
+    const rendererMeta = this.renderers.find((r) => r.meta.id === this.rendererId)?.meta;
 
     el.append(
       h('div', { class: 'pa-panel-title', text: '渲染引擎' }),
@@ -982,6 +1002,17 @@ export class App {
           h('div', { class: 'pa-section' }, ...runNotes.map((n) => h('span', { class: 'pa-note', text: n }))),
         );
       }
+    }
+
+    if (rendererMeta) {
+      el.append(
+        h('div', { class: 'pa-panel-title', text: '渲染引擎能力' }),
+        h(
+          'div',
+          { class: 'pa-section' },
+          ...rendererCapabilityRows(rendererMeta),
+        ),
+      );
     }
 
     el.append(
@@ -1614,6 +1645,70 @@ function kindLabel(kind: GuardKind): string {
     case 'fault': return '子系统故障';
     case 'quota': return '配额降级';
   }
+}
+
+/**
+ * What the active renderer can and cannot do.
+ *
+ * Same idea as the physics 「引擎能力」block: a backend that silently lacks a
+ * feature makes a comparison meaningless, so the missing ones are listed by
+ * name with what the absence actually costs. Anything reported as supported is
+ * read straight from the backend's own `meta.features`, not re-derived here.
+ */
+function rendererCapabilityRows(meta: RenderEngineMeta): HTMLElement[] {
+  const f = meta.features;
+  const rows: [string, boolean, string][] = [
+    ['实例化渲染', f.instancing, '缺失则该后端每个刚体一次绘制调用'],
+    ['光照', f.lighting, '缺失则只有纯色填充，看不出立体感'],
+    ['抗锯齿', f.antialias, '缺失则物体边缘有锯齿'],
+    ['分屏裁剪', f.scissorPanes, '缺失则并排对比只能显示第一个面板'],
+    ['深度缓冲', f.depthBuffer, '缺失则只能靠画家算法排序，穿插关系会错'],
+  ];
+  return rows.map(([label, ok, why]) =>
+    h(
+      'div',
+      { class: 'pa-kv', title: ok ? '' : why },
+      h('span', { text: label }),
+      h(
+        'span',
+        ok
+          ? { text: '✓ 支持' }
+          : {
+            text: `✗ ${why}`,
+            style: 'font-family:var(--sans);font-style:italic;color:var(--text-faint);text-align:right',
+          },
+      ),
+    ),
+  );
+}
+
+/**
+ * Why there is no GPU frame-time figure.
+ *
+ * GPU timing needs `EXT_disjoint_timer_query(_webgl2)`, which Chrome, Firefox
+ * and Safari all disable by default - a precise timer is a side channel for
+ * cross-origin attacks, so it is only available behind a flag. Rather than
+ * print a 0, or (worse) print the CPU submit time under a "GPU" label, the
+ * panel shows this reason instead.
+ */
+let gpuTimingReason: string | null = null;
+function gpuTimingNote(): string {
+  if (gpuTimingReason !== null) return gpuTimingReason;
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') as WebGL2RenderingContext | null;
+    if (!gl) {
+      gpuTimingReason = '无法创建 WebGL2 上下文，读不到 GPU 计时扩展';
+      return gpuTimingReason;
+    }
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    gpuTimingReason = ext
+      ? '浏览器暴露了 EXT_disjoint_timer_query_webgl2，但本项目尚未为各渲染后端接入异步查询状态机（要么全接，要么不报，避免只给部分后端数字造成误导）'
+      : '浏览器未暴露 EXT_disjoint_timer_query_webgl2：出于时序攻击防护，Chrome / Firefox / Safari 默认关闭精确 GPU 计时（需启动参数才开启）';
+  } catch (e) {
+    gpuTimingReason = 'GPU 计时探测失败：' + (e instanceof Error ? e.message : String(e));
+  }
+  return gpuTimingReason;
 }
 
 /** Escapes user-controlled text before it goes through the `html:` sink. */

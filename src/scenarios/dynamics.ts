@@ -355,4 +355,167 @@ export const DYNAMICS_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'domino-circle',
+    name: '环形多米诺',
+    group: '经典动力学',
+    description:
+      '一圈多米诺向心倒。和直线多米诺不同的是，牌与牌之间是**斜向**接触——链式传播能不能绕回起点，取决于求解器对侧向力矩和摩擦锥的处理，直线多米诺测不到这一点。',
+    defaultBodies: 60,
+    maxBodies: 200,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(140, 1, 0, { friction: 0.9 });
+      const n = Math.max(12, Math.min(120, ctx.bodies));
+      const radius = 6;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        // Each tile faces along the tangent, so falling into the next one is
+        // the only way the chain can propagate.
+        const half = a / 2 + Math.PI / 4;
+        b.box(
+          [Math.cos(a) * radius, 1.1, Math.sin(a) * radius],
+          [0.5, 1.0, 0.09],
+          {
+            rotation: [0, Math.sin(half), 0, Math.cos(half)],
+            friction: 0.6,
+            restitution: 0.01,
+            density: 900,
+          },
+        );
+      }
+      b.sphere([radius + 2.2, 1.1, 0], 0.3, {
+        density: 4000, velocity: [-10, 0, 0], tag: 'projectile',
+      });
+      b.extent = radius * 2.6;
+      return b;
+    },
+  },
+
+  {
+    id: 'bowling-pins',
+    name: '保龄球阵',
+    group: '经典动力学',
+    description:
+      '十个瓶 + 一发重球。瓶是细长的圆柱、间距极小，倒下的瓶会**连锁碰撞**十来次——这是接触数在短时间内连续翻倍的场景，也是各引擎「碰撞后是否抖动」最容易看出来的地方。',
+    defaultBodies: 40,
+    maxBodies: 120,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(140, 1, 0, { friction: 0.7 });
+      // Standard ten-pin triangle, one lane.
+      const rows = Math.max(2, Math.min(6, Math.round(ctx.bodies / 8)));
+      const dx = 0.75;
+      const dz = 0.9;
+      let id = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let k = 0; k <= row; k++) {
+          b.cylinder(
+            [(k - row / 2) * dx, 0.75, row * dz],
+            0.22, 0.75,
+            { friction: 0.5, restitution: 0.05, density: 700, tag: 'ball' },
+          );
+          id++;
+        }
+      }
+      void id;
+      b.sphere([0, 0.45, -3.2], 0.45, {
+        density: 3000, friction: 0.4, restitution: 0.05,
+        velocity: [0, 0, 11], tag: 'projectile',
+      });
+      b.extent = 12;
+      return b;
+    },
+  },
+
+  {
+    id: 'avalanche',
+    name: '雪崩',
+    group: '经典动力学',
+    description:
+      '斜坡上密铺两百多个球，初始静止。给顶端一颗球一个侧向推力，整片就滑下来——**起始条件是亚稳的**，所以能不能滑坡、滑多远，完全取决于摩擦与接触求解的一致性。',
+    defaultBodies: 260,
+    maxBodies: 1500,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(200, 1, 0, { friction: 0.9 });
+      // A 24-degree slope built from a long static slab.
+      const slope = 24 * Math.PI / 180;
+      b.box([0, 4, 0], [9, 0.4, 11], {
+        type: 'static', rotation: [-Math.sin(slope / 2), 0, 0, Math.cos(slope / 2)],
+        tag: 'platform', friction: 0.55,
+      });
+      const r = 0.32;
+      const gap = r * 2.06;
+      const n = Math.max(40, ctx.bodies);
+      const cols = 9;
+      let placed = 0;
+      for (let layer = 0; layer < 12 && placed < n; layer++) {
+        for (let ix = 0; ix < cols && placed < n; ix++) {
+          for (let iz = 0; iz < cols && placed < n; iz++) {
+            b.sphere(
+              [(ix - (cols - 1) / 2) * gap, 5.4 + layer * gap, (iz - (cols - 1) / 2) * gap],
+              r,
+              { friction: 0.35, restitution: 0.02, density: 500, angularDamping: 0.2 },
+            );
+            placed++;
+          }
+        }
+      }
+      b.sphere([0, 8, -7], 0.5, {
+        density: 5000, velocity: [0, 0, 12], tag: 'projectile',
+      });
+      b.extent = 26;
+      return b;
+    },
+  },
+
+  {
+    id: 'carom',
+    name: '撞球台',
+    group: '经典动力学',
+    description:
+      '一张带边库的台面，十几颗球同时互相撞击。**球与球、球与库边的能量分配**是这里唯一要看的东西：恢复系数差 0.02，几秒后球的位置分布就完全不同。',
+    defaultBodies: 18,
+    maxBodies: 60,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(120, 1, 0, { friction: 0.6 });
+      const halfX = 5;
+      const halfZ = 2.6;
+      const r = 0.3;
+      // Bed and four cushions.
+      b.box([0, 0.4, 0], [halfX, 0.4, halfZ], { type: 'static', tag: 'platform', friction: 0.25 });
+      b.box([-halfX - 0.2, 0.8, 0], [0.2, 0.4, halfZ + 0.2], { type: 'static', tag: 'wall', restitution: 0.9 });
+      b.box([halfX + 0.2, 0.8, 0], [0.2, 0.4, halfZ + 0.2], { type: 'static', tag: 'wall', restitution: 0.9 });
+      b.box([0, 0.8, -halfZ - 0.2], [halfX + 0.2, 0.4, 0.2], { type: 'static', tag: 'wall', restitution: 0.9 });
+      b.box([0, 0.8, halfZ + 0.2], [halfX + 0.2, 0.4, 0.2], { type: 'static', tag: 'wall', restitution: 0.9 });
+
+      const rnd = rng(ctx.seed || 29);
+      const n = Math.max(4, Math.min(40, ctx.bodies));
+      for (let i = 0; i < n; i++) {
+        b.sphere(
+          [(rnd() - 0.5) * halfX * 1.4, 0.8, (rnd() - 0.5) * halfZ * 1.4],
+          r,
+          {
+            density: 1600, friction: 0.15, restitution: 0.92,
+            linearDamping: 0.05, angularDamping: 0.2,
+            velocity: [(rnd() - 0.5) * 8, 0, (rnd() - 0.5) * 8],
+            tag: 'ball',
+          },
+        );
+      }
+      b.extent = 14;
+      return b;
+    },
+  },
 ];

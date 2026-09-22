@@ -73,6 +73,12 @@ export function colorFor(tag: string | undefined, index: number): number {
     case 'cloth': return 0x4fa3d1;
     case 'crank': case 'rod': case 'slider': return 0x5ec07f;
     case 'chassis': return 0x8e6ad4;
+    // Water gets its own colour on purpose: a fluid built from a few hundred
+    // spheres is only readable as water if every particle is the same blue.
+    // Left to the palette ramp they come out in eight different hues and the
+    // scene reads as "a pile of balls" - which is what it looked like before.
+    case 'fluid': return 0x2f8fd8;
+    case 'grain': return 0xc9a35c;
     default: break;
   }
   const palette = [0x4c7dff, 0x3fb6a8, 0x6c8ee6, 0x4fa3d1, 0x7fb069, 0xc98a3c, 0xa06ad4, 0x3f8fbf];

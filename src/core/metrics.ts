@@ -1,6 +1,6 @@
 import type { EngineMeta, EngineStats } from './types';
 import type { Simulation } from './simulation';
-import { summarize } from './stats';
+import { summarize, type TimingSummary } from './stats';
 import type { RenderEngineMeta, RenderStats } from '../render/types';
 import { geometryCacheBytes, geometryCacheSize } from '../render/geometry';
 
@@ -46,6 +46,19 @@ export interface MetricSources {
   fixedDt: number;
   /** Wall-clock ms spent in the last renderer swap, 0 when never swapped. */
   rendererSwapMs?: number;
+  /**
+   * What submitting a frame costs on the CPU, sampled every frame.
+   *
+   * This is the time to issue the draw calls - shader binding, uniform uploads,
+   * pushing the command stream. It is NOT how long the GPU took to execute
+   * them, and the panel says so: a scene can submit in 0.3 ms and still take
+   * 16 ms to rasterise.
+   */
+  renderTiming?: TimingSummary;
+  /** GPU-side frame time from a timer query, when the driver exposes one. */
+  gpuFrameMs?: number;
+  /** Why there is no GPU timing figure, shown instead of a fake 0. */
+  gpuTimingNote?: string;
   /** Identity + build cost of the world currently under test. */
   scenarioName?: string;
   buildMs?: number;
@@ -278,6 +291,43 @@ export function collectMetrics(src: MetricSources): MetricSection[] {
   ];
   sections.push({ key: 'render', title: '渲染管线', rows: renderRows });
 
+  // ------------------------------------------------------- render perf
+  // Same shape as the physics timing block on purpose: the whole point of
+  // having both axes is being able to see which one you are actually bounded
+  // by. See the note on `renderTiming` about what these numbers do and do not
+  // measure.
+  const rt = src.renderTiming;
+  sections.push({
+    key: 'render-perf',
+    title: '渲染性能',
+    rows: [
+      row('rp-p50', '提交 p50', fmtMs(rt?.p50), {
+        raw: rt?.p50,
+        unit: 'ms',
+        hint: 'CPU 侧发出绘制命令的耗时（着色器绑定、uniform 上传、命令提交），不含 GPU 执行',
+      }),
+      row('rp-p95', '提交 p95', fmtMs(rt?.p95), { raw: rt?.p95, unit: 'ms' }),
+      row('rp-p99', '提交 p99', fmtMs(rt?.p99), { raw: rt?.p99, unit: 'ms' }),
+      row('rp-peak', '提交峰值', fmtMs(rt?.max), { raw: rt?.max, unit: 'ms' }),
+      row('rp-jitter', '抖动（标准差）', fmtMs(rt?.stddev), { raw: rt?.stddev, unit: 'ms' }),
+      row('rp-budget', '帧预算占用', frameBudgetLabel(rt?.p95, src.fixedDt), {
+        raw: rt?.p95,
+        hint: '提交耗时占一帧固定步长预算的比例；和「物理步 p95」一起看，就知道这一帧是谁吃掉的',
+      }),
+      row('rp-gpu', 'GPU 帧耗时', src.gpuFrameMs === undefined ? '—' : fmtMs(src.gpuFrameMs) + ' ms', {
+        raw: src.gpuFrameMs,
+        missing: src.gpuFrameMs === undefined
+          ? (src.gpuTimingNote ?? '该后端未提供 GPU 计时')
+          : undefined,
+        hint: '来自 EXT_disjoint_timer_query；浏览器出于时序攻击防护大多默认禁用该扩展',
+      }),
+      row('rp-samples', '样本数', fmtInt(rt?.samples), {
+        raw: rt?.samples,
+        hint: '滑动窗口内的帧数，样本太少时 p95/p99 没有意义',
+      }),
+    ],
+  });
+
   // ------------------------------------------------------------- host
   // .pa-canvas covers every backend: canvas elements, an <svg>, or the CSS
   // scene wrapper. Querying `canvas` alone made the host rows read '—' for
@@ -302,6 +352,19 @@ export function collectMetrics(src: MetricSources): MetricSection[] {
 function sourceCostLabel(meta?: RenderEngineMeta): string {
   if (!meta) return '—';
   return meta.costKb > 0 ? `+${meta.costKb} kB（gzip）` : '零额外依赖';
+}
+
+/**
+ * How much of one fixed step the render submission eats.
+ *
+ * Physics and rendering share the same 16.7 ms frame, so a render p95 of 9 ms
+ * next to a physics p95 of 8 ms is a frame that cannot hold 60 Hz - and now the
+ * panel says which side is responsible instead of leaving it to arithmetic.
+ */
+function frameBudgetLabel(p95: number | undefined, fixedDt: number): string {
+  if (p95 === undefined || !Number.isFinite(p95) || fixedDt <= 0) return '—';
+  const budget = fixedDt * 1000;
+  return `${((p95 / budget) * 100).toFixed(1)}%（预算 ${budget.toFixed(1)} ms）`;
 }
 
 /**

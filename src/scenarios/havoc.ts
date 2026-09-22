@@ -21,14 +21,24 @@
 import type { Scenario } from './types';
 import { SceneBuilder, rng } from './kit';
 
-/** Water-like particle: slides freely, loses almost nothing to bounce. */
+/**
+ * Water-like particle: slides freely, loses almost nothing to bounce.
+ *
+ * The tag matters as much as the physics: every fluid particle is drawn in the
+ * same blue (see colorFor). Without it the particles come out in eight palette
+ * hues and the pool reads as a pile of balls rather than as water.
+ */
 const FLUID = {
   friction: 0.04,
   restitution: 0.01,
   angularDamping: 0.5,
   linearDamping: 0.06,
   density: 1000,
+  tag: 'fluid',
 } as const;
+
+/** Same motion, different material: the carved box is filled with grain, not water. */
+const GRAIN = { ...FLUID, tag: 'grain', friction: 0.45, angularDamping: 0.7 } as const;
 
 export const HAVOC_SCENARIOS: Scenario[] = [
   {
@@ -116,7 +126,7 @@ export const HAVOC_SCENARIOS: Scenario[] = [
             -half + wall + r + iz * r * 2.05,
           ],
           r,
-          { ...FLUID },
+          { ...GRAIN },
         );
       }
       // One heavy shot at the open face, to make the shell show its loading.
@@ -242,7 +252,7 @@ export const HAVOC_SCENARIOS: Scenario[] = [
       b.gravity = ctx.gravity;
       b.ground(200, 1, 0, { friction: 0.85 });
 
-      const r = 0.28;
+      const r = 0.22;
       const gap = r * 2.06;
       const cols = 9;
       const rows = 9;
@@ -312,7 +322,7 @@ export const HAVOC_SCENARIOS: Scenario[] = [
       b.box([0, wall + height / 2, -half], [half, height / 2, wall], { type: 'static', tag: 'wall' });
       b.box([0, wall + height / 2, half], [half, height / 2, wall], { type: 'static', tag: 'wall' });
 
-      const r = 0.26;
+      const r = 0.22;
       const gap = r * 2.06;
       const cols = Math.max(2, Math.floor((half * 2 - wall * 2) / gap));
       const perLayer = cols * cols;
@@ -415,6 +425,205 @@ export const HAVOC_SCENARIOS: Scenario[] = [
         );
       }
       b.extent = 10 + levels * 0.02;
+      return b;
+    },
+  },
+
+  {
+    id: 'fluid-cascade',
+    name: '液体瀑布',
+    group: '破坏与流体',
+    description:
+      '颗粒从高处一级级跌落到三层台面上。看点不是流动速度，而是**每次落点重新铺开**：粒子从自由落体撞进静止堆，接触对数量在几帧内暴涨十几倍，是接触求解最难受的瞬间。',
+    defaultBodies: 260,
+    maxBodies: 1600,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.85 });
+
+      const r = 0.2;
+      const gap = r * 2.06;
+      // Three stepped ledges: each one catches the flow and spills it onward.
+      const ledges: [number, number, number][] = [
+        [-6, 14, 3],
+        [1, 10, 3],
+        [7, 6.5, 3],
+      ];
+      for (const [x, y, halfZ] of ledges) {
+        b.box([x, y, 0], [3.2, 0.25, halfZ], { type: 'static', tag: 'platform' });
+        b.box([x + 3.1, y + 0.35, 0], [0.2, 0.35, halfZ], { type: 'static', tag: 'thin-wall' });
+      }
+
+      const n = Math.max(40, ctx.bodies);
+      const cols = 7;
+      const perLayer = cols * cols;
+      let placed = 0;
+      for (let i = 0; i < n; i++) {
+        const ix = i % cols;
+        const iz = Math.floor(i / cols) % cols;
+        const iy = Math.floor(i / perLayer);
+        if (placed >= n) break;
+        b.sphere(
+          [-6 + (ix - (cols - 1) / 2) * gap, 16 + r + iy * gap, (iz - (cols - 1) / 2) * gap],
+          r,
+          { ...FLUID },
+        );
+        placed++;
+      }
+      b.extent = 22;
+      return b;
+    },
+  },
+
+  {
+    id: 'fluid-drain',
+    name: '液体排空',
+    group: '破坏与流体',
+    description:
+      '一池颗粒从底部的小孔漏出。孔径只有粒子直径的三倍，粒子必须**互相推挤着排队通过**——这是接触求解在瓶颈几何下的连续稳定性测试，也是各种穿透/抖动的放大镜。',
+    defaultBodies: 280,
+    maxBodies: 1500,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.8 });
+
+      const half = 3.4;
+      const wall = 0.3;
+      const height = 4;
+      const r = 0.2;
+      const gap = r * 2.06;
+      // A floor with a gap in the middle: four static slabs leaving a hole.
+      const hole = gap * 3;
+      const slab = (half - hole) / 2;
+      for (const sx of [-1, 1]) {
+        b.box([sx * (hole + slab), wall, 0], [slab, wall, half], { type: 'static', tag: 'wall' });
+      }
+      for (const sz of [-1, 1]) {
+        b.box([0, wall, sz * (hole + slab)], [hole, wall, slab], { type: 'static', tag: 'wall' });
+      }
+      // Side walls of the tank.
+      for (const sx of [-1, 1]) {
+        b.box([sx * half, wall + height / 2, 0], [wall, height / 2, half], { type: 'static', tag: 'wall' });
+        b.box([0, wall + height / 2, sx * half], [half, height / 2, wall], { type: 'static', tag: 'wall' });
+      }
+
+      const n = Math.max(30, ctx.bodies);
+      const cols = Math.max(2, Math.floor((half * 2 - wall * 2) / gap));
+      let placed = 0;
+      for (let layer = 0; layer < 40 && placed < n; layer++) {
+        for (let iy = 0; iy < cols && placed < n; iy++) {
+          for (let iz = 0; iz < cols && placed < n; iz++) {
+            b.sphere(
+              [
+                -half + wall + r + iy * gap,
+                wall + r + 0.1 + layer * gap,
+                -half + wall + r + iz * gap,
+              ],
+              r,
+              { ...FLUID },
+            );
+            placed++;
+          }
+        }
+      }
+      b.extent = 14;
+      return b;
+    },
+  },
+
+  {
+    id: 'destruct-wall',
+    name: '逐层打穿',
+    group: '破坏与流体',
+    description:
+      '四道独立的砖墙排成一列，一发高速弹丸依次打穿。每一道墙都是**全新的初始接触状态**，所以这一场能连续看到四次「撞击瞬间」——比单面墙更能暴露恢复系数与穿透补偿的差异。',
+    defaultBodies: 180,
+    maxBodies: 900,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.8 });
+
+      const rnd = rng(ctx.seed || 53);
+      const rows = 8;
+      const cols = 5;
+      const bw = 0.5;
+      const bh = 0.45;
+      let n = 0;
+      const max = Math.max(20, ctx.bodies);
+      for (let w = 0; w < 4; w++) {
+        const z = -6 + w * 4;
+        for (let iy = 0; iy < rows; iy++) {
+          const off = iy % 2 ? bw * 0.5 : 0;
+          for (let ix = 0; ix < cols; ix++) {
+            if (n >= max) break;
+            b.box(
+              [(ix - (cols - 1) / 2) * bw * 1.02 + off, 0.3 + iy * bh * 1.02, z + (rnd() - 0.5) * 0.01],
+              [bw * 0.49, bh * 0.49, 0.22],
+              { friction: 0.7, restitution: 0.02, density: 1500 },
+            );
+            n++;
+          }
+        }
+      }
+      b.sphere([-14, 3.2, 0], 0.4, {
+        density: 8000,
+        velocity: [60, 0, 0],
+        ccd: true,
+        restitution: 0.05,
+        tag: 'projectile',
+      });
+      b.extent = 20;
+      return b;
+    },
+  },
+
+  {
+    id: 'destruct-columns',
+    name: '承重柱失效',
+    group: '破坏与流体',
+    description:
+      '四根柱子撑着一块平台，弹丸从侧面逐根打断。真正难的不是打断，而是**打断之后**：平台失去支撑时的力矩、剩余柱子的侧向受力、以及最终倒塌的姿态，全都依赖接触求解的稳定性。',
+    defaultBodies: 60,
+    maxBodies: 300,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.9 });
+
+      const span = 3.2;
+      const segH = 0.5;
+      const levels = Math.max(3, Math.min(12, Math.floor(ctx.bodies / 12)));
+      const positions: [number, number][] = [
+        [-span, -span], [span, -span], [span, span], [-span, span],
+      ];
+      for (const [px, pz] of positions) {
+        for (let l = 0; l < levels; l++) {
+          b.box(
+            [px, segH + l * segH * 2.02, pz],
+            [0.42, segH, 0.42],
+            { friction: 0.75, restitution: 0.01, density: 1400 },
+          );
+        }
+      }
+      // The slab the columns are holding up.
+      const top = segH + levels * segH * 2.02;
+      b.box([0, top + 0.4, 0], [span + 0.9, 0.4, span + 0.9], {
+        friction: 0.8, restitution: 0, density: 1900, tag: 'roof',
+      });
+      b.sphere([-12, top * 0.35, -span], 0.45, {
+        density: 9000,
+        velocity: [52, 0, 0],
+        ccd: true,
+        tag: 'projectile',
+      });
+      b.extent = 16;
       return b;
     },
   },
