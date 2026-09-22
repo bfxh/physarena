@@ -2,7 +2,7 @@ import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { cachedGeometryData, instanceColors, signature, type GeometryData } from '../geometry';
 import { slotGrid } from '../layout';
 import {
-  OrbitCamera, axisLines, floorLines, linkProgram, renderable, r2, r3,
+  OrbitCamera, axisLines, floorLines, glContextAttributes, linkProgram, renderable, r2, r3,
 } from '../glCommon';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
@@ -407,7 +407,7 @@ export class WebGL1RenderEngine implements IRenderEngine {
     this.canvasHost = host;
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
-    const gl = canvas.getContext('webgl', { antialias: true, alpha: false, depth: true }) as WebGLRenderingContext | null;
+    const gl = canvas.getContext('webgl', glContextAttributes()) as WebGLRenderingContext | null;
     if (!gl) throw new Error('无法创建 WebGL1 上下文。');
     const inst = gl.getExtension('ANGLE_instanced_arrays') as ANGLE_instanced_arrays | null;
     if (!inst) {

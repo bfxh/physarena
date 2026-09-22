@@ -2,7 +2,7 @@ import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { instanceColors } from '../geometry';
 import { slotGrid } from '../layout';
 import {
-  OrbitCamera, axisLines, floorLines, linkProgram, renderable, r2, r3,
+  OrbitCamera, axisLines, floorLines, glContextAttributes, linkProgram, renderable, r2, r3,
 } from '../glCommon';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
@@ -239,12 +239,7 @@ export class PointsRenderEngine implements IRenderEngine {
     this.canvasHost = host;
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
-    const gl = canvas.getContext('webgl2', {
-      antialias: true,
-      alpha: false,
-      depth: true,
-      powerPreference: 'high-performance',
-    });
+    const gl = canvas.getContext('webgl2', glContextAttributes());
     if (!gl) throw new Error('点云后端需要 WebGL2，当前浏览器不支持。');
     this.gl = gl;
     this.canvasEl = canvas;

@@ -51,6 +51,27 @@ npm run drive:bench             # 9 引擎 × 8 场景，结果落 out/bench.jso
 驱动脚本（`scripts/arena-drive.mjs`）用 `playwright-core` 驱动本机 Edge，不下载浏览器；
 `ARENA_TAG=name` 可给产物加后缀（如 `out/bench-after.json`）。
 
+### 渲染轴验收检测
+
+```bash
+npm run preview                 # 先起生产预览
+npm run verify:renderers        # 9 个可用渲染器逐像素采样 + 3 个引擎物理冒烟
+node scripts/verify-renderers.mjs --batch 3   # 批次调小，页面更容易稳住
+```
+
+同一套驱动方式（`playwright-core` + 本机 Edge，不下载浏览器）。对每个启用的渲染器：
+切过去 → 采样画布 → 报告颜色数与非背景像素数，报告落 `out/verify-renderers.json`。
+
+**判据是「画布上到底有没有画面」，不是「有没有报错」。** 这个项目两种误判都出现过：
+
+- 报告完美（draw call、实例数、`isReady()` 全对）但**一个三角形都没画**（Babylon 的 thin instance）；
+- 画得好好的，但**页内读不到**，被误报成失败（`preserveDrawingBuffer` 默认关闭时，
+  `drawImage` 读 WebGL canvas 只能拿到全透明像素）。
+
+**关于脚本会带上的 `?preserveBuffer=1`**：默认不开——保留绘制缓冲要付帧时间代价，而这是跑分测试场。
+但不开时页内像素读取不可靠，验收就会误报。**测量路径保持干净，检查路径保持诚实**，
+这个参数就是把两者分开的那条线。
+
 > **想看/测这个应用，用 `npm run preview`（或 `npm run dev` 起来之后直接刷新一次）。**
 > dev server 的依赖预构建会在首次加载后触发一次整体刷新；如果你正好在这个瞬间看页面，会看到白屏或重载。生产预览没有这个问题，加载也更快。
 > 若页面真的空白，右下角会出现红色错误条（同步错误 / 未处理的异步错误 / WebGL 上下文丢失 / 启动超时都会显示在那里），不会再默默白屏。

@@ -3,6 +3,7 @@ import {
   cachedGeometryData, instanceColors, signature, type GeometryData,
 } from '../geometry';
 import { slotGrid } from '../layout';
+import { glContextAttributes } from '../glCommon';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
 } from '../types';
@@ -460,12 +461,7 @@ export class WebGL2RenderEngine implements IRenderEngine {
     this.canvasHost = host;
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
-    const gl = canvas.getContext('webgl2', {
-      antialias: true,
-      alpha: false,
-      depth: true,
-      powerPreference: 'high-performance',
-    });
+    const gl = canvas.getContext('webgl2', glContextAttributes());
     if (!gl) {
       throw new Error('无法创建 WebGL2 上下文：浏览器可能只支持 WebGL1，或禁用硬件加速。请改用 three.js 或 Canvas2D 渲染器。');
     }

@@ -2,7 +2,7 @@ import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { cachedGeometryData, instanceColors, signature, type GeometryData } from '../geometry';
 import { slotGrid } from '../layout';
 import {
-  OrbitCamera, axisLines, edgeIndices, floorLines, linkProgram, renderable, r2, r3,
+  OrbitCamera, axisLines, edgeIndices, floorLines, glContextAttributes, linkProgram, renderable, r2, r3,
   writeInstanceMatrix,
 } from '../glCommon';
 import type {
@@ -263,7 +263,7 @@ export class WireframeRenderEngine implements IRenderEngine {
     this.canvasHost = host;
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
-    const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, depth: true });
+    const gl = canvas.getContext('webgl2', glContextAttributes());
     if (!gl) throw new Error('线框后端需要 WebGL2。');
     this.gl = gl;
     this.canvasEl = canvas;

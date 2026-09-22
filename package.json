@@ -15,6 +15,7 @@
     "preview": "vite preview --port 4173",
     "drive:selftest": "node scripts/arena-drive.mjs selftest",
     "drive:bench": "node scripts/arena-drive.mjs bench",
+    "verify:renderers": "node scripts/verify-renderers.mjs --engines",
     "probe:jolt": "node scripts/probe-jolt-bodyid.mjs",
     "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs"
   },

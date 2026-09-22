@@ -1,0 +1,195 @@
+{
+  "at": "2026-09-22T05:58:03.452Z",
+  "base": "http://localhost:4173",
+  "list": [
+    {
+      "id": "three",
+      "name": "three.js",
+      "unavailable": null
+    },
+    {
+      "id": "babylon",
+      "name": "Babylon.js",
+      "unavailable": null
+    },
+    {
+      "id": "webgpu",
+      "name": "原生 WebGPU",
+      "unavailable": "默认禁用：在无头或软件渲染的环境里，WebGPU 的 requestAdapter 会阻塞主线程而不是报错，页面会直接冻结且无法切回。确认你的浏览器有硬件加速后，用 ?allowWebGPU=1 打开本页即可启用。"
+    },
+    {
+      "id": "webgl2",
+      "name": "原生 WebGL2",
+      "unavailable": null
+    },
+    {
+      "id": "webgl1",
+      "name": "原生 WebGL1",
+      "unavailable": null
+    },
+    {
+      "id": "points",
+      "name": "点云（WebGL2）",
+      "unavailable": null
+    },
+    {
+      "id": "wireframe",
+      "name": "线框（WebGL2）",
+      "unavailable": null
+    },
+    {
+      "id": "canvas2d",
+      "name": "Canvas2D 软件投影",
+      "unavailable": null
+    },
+    {
+      "id": "svg",
+      "name": "SVG 多边形",
+      "unavailable": null
+    },
+    {
+      "id": "css3d",
+      "name": "CSS 3D 合成",
+      "unavailable": null
+    }
+  ],
+  "results": [
+    {
+      "id": "three",
+      "cur": "three",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 124,
+        "scene": 36139,
+        "size": "838x690"
+      },
+      "stepP50": "0.050",
+      "triangles": "492",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "babylon",
+      "cur": "babylon",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 102,
+        "scene": 36139,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "492",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "webgl2",
+      "cur": "webgl2",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 143,
+        "scene": 36139,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "492",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "webgl1",
+      "cur": "webgl1",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 143,
+        "scene": 36139,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "492",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "points",
+      "cur": "points",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 23,
+        "scene": 1319,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "0",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "wireframe",
+      "cur": "wireframe",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 183,
+        "scene": 5014,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "0",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "canvas2d",
+      "cur": "canvas2d",
+      "sample": {
+        "tag": "CANVAS",
+        "distinct": 267,
+        "scene": 36139,
+        "size": "838x690"
+      },
+      "stepP50": "0.045",
+      "triangles": "240",
+      "instances": "40",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "svg",
+      "cur": "svg",
+      "sample": {
+        "tag": "svg",
+        "nodes": 123,
+        "distinct": 4,
+        "scene": 123
+      },
+      "stepP50": "0.045",
+      "triangles": "120",
+      "instances": "40",
+      "guards": 0,
+      "ok": true
+    },
+    {
+      "id": "css3d",
+      "cur": "css3d",
+      "sample": {
+        "tag": "DIV",
+        "nodes": 42,
+        "distinct": 4,
+        "scene": 42
+      },
+      "stepP50": "0.045",
+      "triangles": "0",
+      "instances": "41",
+      "guards": 0,
+      "ok": true
+    }
+  ],
+  "engines": null,
+  "pageProblems": []
+}

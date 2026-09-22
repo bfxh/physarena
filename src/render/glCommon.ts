@@ -337,3 +337,26 @@ export function edgeIndices(indices: Uint32Array, maxEdges = 200000): Uint32Arra
   }
   return new Uint32Array(out);
 }
+
+/**
+ * GL context attributes shared by every hand-written backend.
+ *
+ * `preserveDrawingBuffer` is deliberately off by default: it costs performance
+ * and this is a benchmark lab. But a canvas created without it cannot be read
+ * back from inside the page once the frame has been composited - `drawImage`
+ * returns fully transparent pixels - which makes in-page pixel verification
+ * impossible. `?preserveBuffer=1` turns it on for the acceptance script, so
+ * the measurement path stays clean while the checking path stays honest.
+ */
+export function glContextAttributes(extra: WebGLContextAttributes = {}): WebGLContextAttributes {
+  const preserve = typeof location !== 'undefined'
+    && new URLSearchParams(location.search).get('preserveBuffer') === '1';
+  return {
+    antialias: true,
+    alpha: false,
+    depth: true,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: preserve,
+    ...extra,
+  };
+}

@@ -6,6 +6,7 @@ import {
 import type { BodyDesc, BodyState, Vec3 } from '../../core/types';
 import { cachedGeometryData, instanceColors, signature, type GeometryData } from '../geometry';
 import { slotGrid } from '../layout';
+import { glContextAttributes } from '../glCommon';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
 } from '../types';
@@ -295,14 +296,13 @@ export class BabylonRenderEngine implements IRenderEngine {
     const canvas = document.createElement('canvas');
     canvas.className = 'pa-canvas';
     const engine = new BabylonEngine(canvas, true, {
-      // Kept true, unlike the other backends, and this is a deliberate call.
-      // With the default (false) the browser is free to discard the drawing
-      // buffer right after compositing, so an *external* capture - a screenshot
-      // tool, or the renderer comparison sheet this repo ships in docs/ - reads
-      // an empty canvas while the app itself looks perfectly fine on screen.
-      // In-frame readbacks (drawImage + getImageData) work either way, which is
-      // exactly why the pixel test passed while the screenshot was blank.
-      preserveDrawingBuffer: true,
+      // Follows the shared switch rather than being hard-coded. Without
+      // preservation the canvas cannot be read back from inside the page once
+      // the frame is composited (`drawImage` yields all-zero pixels), which
+      // makes the acceptance script blind; but keeping it on permanently costs
+      // frame time, and this is a benchmark lab. `?preserveBuffer=1` turns it
+      // on for verification only.
+      preserveDrawingBuffer: glContextAttributes().preserveDrawingBuffer === true,
       stencil: false,
       antialias: true,
       powerPreference: 'high-performance',

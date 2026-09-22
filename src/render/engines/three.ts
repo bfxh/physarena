@@ -5,6 +5,7 @@ import {
   buildGeometryData, instanceColors, cachedGeometryData, signature, type GeometryData,
 } from '../geometry';
 import { slotGrid } from '../layout';
+import { glContextAttributes } from '../glCommon';
 import type {
   IRenderEngine, IRenderLayer, RenderEngineMeta, RenderProbe, RenderSlot, RenderStats,
 } from '../types';
@@ -249,6 +250,11 @@ export class ThreeRenderEngine implements IRenderEngine {
         antialias: true,
         powerPreference: 'high-performance',
         stencil: false,
+        // Follows the shared switch. Without preservation a canvas cannot be
+        // read back from inside the page once the frame is composited, which
+        // makes the acceptance script blind to this backend while it renders
+        // perfectly well.
+        preserveDrawingBuffer: glContextAttributes().preserveDrawingBuffer === true,
       });
     } catch (e) {
       // Without this the constructor throw was swallowed by the async boot
