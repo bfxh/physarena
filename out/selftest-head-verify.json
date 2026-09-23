@@ -4,7 +4,7 @@
     "engineName": "vxl-phys (RUST WL)",
     "language": "Rust",
     "backend": "WASM",
-    "bootMs": 20.054999999701977,
+    "bootMs": 20.02500000037253,
     "bootOk": true,
     "results": [
       {
@@ -164,7 +164,7 @@
     "engineName": "Rapier 3D",
     "language": "Rust",
     "backend": "WASM",
-    "bootMs": 85.23999999463558,
+    "bootMs": 77.52000000141561,
     "bootOk": true,
     "results": [
       {
@@ -324,7 +324,7 @@
     "engineName": "Jolt Physics",
     "language": "C++",
     "backend": "WASM",
-    "bootMs": 115.50999999791384,
+    "bootMs": 108.57000000029802,
     "bootOk": true,
     "results": [
       {
@@ -484,7 +484,7 @@
     "engineName": "NVIDIA PhysX 5",
     "language": "C++",
     "backend": "WASM",
-    "bootMs": 177.64999999850988,
+    "bootMs": 112.36500000022352,
     "bootOk": true,
     "results": [
       {
@@ -644,7 +644,7 @@
     "engineName": "Bullet (ammo.js)",
     "language": "C++",
     "backend": "asm.js",
-    "bootMs": 47.87000000476837,
+    "bootMs": 46.32000000029802,
     "bootOk": true,
     "results": [
       {
@@ -804,7 +804,7 @@
     "engineName": "Havok",
     "language": "C++",
     "backend": "WASM",
-    "bootMs": 20.114999994635582,
+    "bootMs": 35.66000000014901,
     "bootOk": true,
     "results": [
       {
@@ -964,7 +964,7 @@
     "engineName": "Crashcat",
     "language": "TypeScript",
     "backend": "Pure JS",
-    "bootMs": 13.33500000089407,
+    "bootMs": 14.330000000074506,
     "bootOk": true,
     "results": [
       {
@@ -1124,7 +1124,7 @@
     "engineName": "cannon-es",
     "language": "TypeScript",
     "backend": "Pure JS",
-    "bootMs": 21.149999998509884,
+    "bootMs": 5.6650000009685755,
     "bootOk": true,
     "results": [
       {
@@ -1284,7 +1284,7 @@
     "engineName": "Oimo.js",
     "language": "JavaScript",
     "backend": "Pure JS",
-    "bootMs": 6.185000002384186,
+    "bootMs": 5.939999999478459,
     "bootOk": true,
     "results": [
       {

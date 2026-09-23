@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-22T05:58:03.452Z",
+  "at": "2026-09-23T01:33:53.142Z",
   "base": "http://localhost:4173",
   "list": [
     {
@@ -63,7 +63,7 @@
         "scene": 36139,
         "size": "838x690"
       },
-      "stepP50": "0.050",
+      "stepP50": "0.030",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -78,7 +78,7 @@
         "scene": 36139,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.030",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -93,7 +93,7 @@
         "scene": 36139,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.035",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -108,7 +108,7 @@
         "scene": 36139,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.030",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -123,7 +123,7 @@
         "scene": 1319,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.030",
       "triangles": "0",
       "instances": "41",
       "guards": 0,
@@ -138,7 +138,7 @@
         "scene": 5014,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.027",
       "triangles": "0",
       "instances": "41",
       "guards": 0,
@@ -153,7 +153,7 @@
         "scene": 36139,
         "size": "838x690"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.025",
       "triangles": "240",
       "instances": "40",
       "guards": 0,
@@ -168,7 +168,7 @@
         "distinct": 4,
         "scene": 123
       },
-      "stepP50": "0.045",
+      "stepP50": "0.025",
       "triangles": "120",
       "instances": "40",
       "guards": 0,
@@ -183,13 +183,35 @@
         "distinct": 4,
         "scene": 42
       },
-      "stepP50": "0.045",
+      "stepP50": "0.020",
       "triangles": "0",
       "instances": "41",
       "guards": 0,
       "ok": true
     }
   ],
-  "engines": null,
+  "engines": [
+    {
+      "id": "rapier3d",
+      "engine": "Rapier 3D",
+      "step": "0.020",
+      "bodies": "41",
+      "nonFinite": false
+    },
+    {
+      "id": "cannon-es",
+      "engine": "cannon-es",
+      "step": "0.033",
+      "bodies": "41",
+      "nonFinite": false
+    },
+    {
+      "id": "oimo",
+      "engine": "Oimo.js",
+      "step": "0.025",
+      "bodies": "41",
+      "nonFinite": false
+    }
+  ],
   "pageProblems": []
 }
