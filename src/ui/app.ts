@@ -1015,6 +1015,13 @@ export class App {
       );
     }
 
+    if (sim && meta) {
+      el.append(
+        h('div', { class: 'pa-panel-title', text: '本场景 × 当前引擎' }),
+        h('div', { class: 'pa-section' }, ...scenarioFitRows(sim, meta)),
+      );
+    }
+
     el.append(
       h('div', { class: 'pa-panel-title', text: '当前场景' }),
       h(
@@ -1636,6 +1643,67 @@ function metricLine(k: string, v: string, variant?: 'warn'): HTMLElement {
     h('span', { class: 'k', text: k }),
     h('span', { class: variant ? `v ${variant}` : 'v', text: v }),
   );
+}
+
+/**
+ * What this scenario asks of the engine, and what the engine cannot give.
+ *
+ * A scene can be perfectly valid and still be silently downgraded: cannon-es
+ * has no cylinder, PhysX has no convex hull, and Jolt's constraints do not take
+ * effect under this binding at all. Naming the mismatches *here* - attached to
+ * the scene you are actually looking at - is the difference between "this
+ * engine scored badly" and "this engine never ran the thing the title claims".
+ *
+ * Read from the built world rather than from the scenario source, because a
+ * build function is opaque and bodies may be spawned conditionally.
+ */
+function scenarioFitRows(sim: Simulation, meta: EngineMeta): HTMLElement[] {
+  const bodies = sim.world?.bodies ?? [];
+  const joints = sim.world?.joints ?? [];
+  const usedShapes = [...new Set(bodies.map((b) => b.shape.kind))];
+  const usedJoints = [...new Set(joints.map((j) => j.kind))];
+  const missShape = usedShapes.filter((k) => !meta.capabilities.shapes.includes(k));
+  const missJoint = usedJoints.filter((k) => !meta.capabilities.joints.includes(k));
+  const label = (k: string, table: Record<string, string>) => table[k] ?? k;
+
+  const rows: HTMLElement[] = [
+    h(
+      'div',
+      { class: 'pa-kv' },
+      h('span', { text: '形状需求' }),
+      h('span', {
+        class: missShape.length ? 'miss' : '',
+        text: usedShapes.length ? usedShapes.map((k) => label(k, SHAPE_LABEL)).join(' · ') : '（无刚体）',
+      }),
+    ),
+  ];
+  if (missShape.length) {
+    rows.push(h('div', {
+      class: 'pa-note',
+      text: `⚠ 该引擎不支持 ${missShape.map((k) => label(k, SHAPE_LABEL)).join('、')}：这些刚体会被近似成别的图元，读数不代表原始形状。`,
+    }));
+  }
+  if (usedJoints.length) {
+    rows.push(h(
+      'div',
+      { class: 'pa-kv' },
+      h('span', { text: '关节需求' }),
+      h('span', {
+        class: missJoint.length ? 'miss' : '',
+        text: usedJoints.map((k) => label(k, JOINT_LABEL)).join(' · '),
+      }),
+    ));
+    if (missJoint.length) {
+      rows.push(h('div', {
+        class: 'pa-note',
+        text: `⚠ 该引擎不支持 ${missJoint.map((k) => label(k, JOINT_LABEL)).join('、')}：对应约束不会生效，物体之间不会连起来。`,
+      }));
+    }
+  }
+  if (!missShape.length && !missJoint.length) {
+    rows.push(h('div', { class: 'pa-note', text: '✓ 本场景用到的形状与关节，当前引擎全部支持。' }));
+  }
+  return rows;
 }
 
 function kindLabel(kind: GuardKind): string {

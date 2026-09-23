@@ -237,4 +237,116 @@ export const STACKING_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'stack-arch',
+    name: '石拱',
+    group: '堆叠与结构',
+    description:
+      '楔形块搭成的半圆拱，顶上再压一块压顶石。拱是**唯一一种「整体稳定、但每块单独都不稳」的结构**：任何一块的摩擦或接触法线不对，整个拱就连锁塌掉。它对切向接触的处理格外敏感。',
+    defaultBodies: 30,
+    maxBodies: 120,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.9 });
+      const n = Math.max(9, Math.min(40, ctx.bodies));
+      const radius = 5;
+      const thick = 0.6;
+      for (const sx of [-1, 1]) {
+        b.box([sx * (radius + 0.3), 0.6, 0], [0.6, 0.6, 1.6], { type: 'static', tag: 'wall' });
+      }
+      for (let i = 0; i < n; i++) {
+        const a = (Math.PI * (i + 0.5)) / n;
+        const half = a / 2 + Math.PI / 4;
+        b.box(
+          [Math.cos(a) * radius, Math.sin(a) * radius + 1.2, 0],
+          [0.42, thick, 1.4],
+          {
+            rotation: [0, 0, Math.sin(-half), Math.cos(-half)],
+            friction: 0.95, restitution: 0, density: 2600,
+          },
+        );
+      }
+      b.box([0, radius + 1.2 + thick + 0.3, 0], [0.55, 0.3, 1.4], {
+        friction: 0.9, density: 3000, tag: 'shell',
+      });
+      b.extent = 16;
+      return b;
+    },
+  },
+
+  {
+    id: 'stack-honeycomb',
+    name: '蜂窝堆叠',
+    group: '堆叠与结构',
+    description:
+      '圆柱按六方密排铺成一片。这是**单位面积上接触最多**的二维排布，接触对数量明显高于同数量的方形堆叠——适合对比各引擎的接触生成与去重开销。',
+    defaultBodies: 60,
+    maxBodies: 260,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.85 });
+      const r = 0.5;
+      const h = 0.6;
+      const dx = r * 2.02;
+      const dz = r * Math.sqrt(3) * 1.01;
+      const n = Math.max(6, ctx.bodies);
+      let placed = 0;
+      for (let row = 0; row < 14 && placed < n; row++) {
+        for (let col = 0; col < 14 && placed < n; col++) {
+          b.cylinder(
+            [(col - 6.5) * dx + (row % 2 ? dx / 2 : 0), h, (row - 6.5) * dz],
+            r, h,
+            { friction: 0.7, restitution: 0.01, density: 1400, tag: 'ball' },
+          );
+          placed++;
+        }
+      }
+      b.extent = 16;
+      return b;
+    },
+  },
+
+  {
+    id: 'stack-mixed-pile',
+    name: '混合尺寸堆',
+    group: '堆叠与结构',
+    description:
+      '大小相差四倍的箱子随机堆叠。**尺寸比和质量比同时拉开**：小箱子掉进大箱子的缝里、大箱子压在小箱子上。比等尺寸堆叠更容易暴露稳定性问题，也比单一质量比场景更接近现实。',
+    defaultBodies: 70,
+    maxBodies: 300,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(170, 1, 0, { friction: 0.9 });
+      const rnd = rng(ctx.seed || 97);
+      const n = Math.max(8, ctx.bodies);
+      let y = 0.6;
+      let rowHeight = 0;
+      for (let i = 0; i < n; i++) {
+        const s = 0.22 + rnd() * 0.66;
+        const half = rnd() * Math.PI;
+        rowHeight = Math.max(rowHeight, s * 2);
+        b.box(
+          [(rnd() - 0.5) * 7, y, (rnd() - 0.5) * 7],
+          [s, s, s],
+          {
+            rotation: [0, Math.sin(half), 0, Math.cos(half)],
+            friction: 0.8, restitution: 0.01, density: 900,
+          },
+        );
+        if (i % 8 === 7) {
+          y += rowHeight + 0.05;
+          rowHeight = 0;
+        }
+      }
+      b.extent = 16;
+      return b;
+    },
+  },
 ];

@@ -200,4 +200,94 @@ export const SHAPE_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'shape-zoo-hard',
+    name: '硬骨头形状',
+    group: '碰撞形状',
+    description:
+      '圆锥、凸包、三角网一起下落。这三个恰好是各引擎支持度最参差的地方——圆锥常被降级成圆柱或凸包，三角网在部分引擎里只支持静态。**哪些被悄悄近似了，看右栏「本场景 × 当前引擎」。**',
+    defaultBodies: 48,
+    maxBodies: 200,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.85 });
+      const rnd = rng(ctx.seed || 71);
+      const n = Math.max(6, ctx.bodies);
+      for (let i = 0; i < n; i++) {
+        const x = (rnd() - 0.5) * 9;
+        const z = (rnd() - 0.5) * 9;
+        const y = 2 + (i / n) * 12;
+        const kind = i % 3;
+        if (kind === 0) {
+          b.cone([x, y, z], 0.55, 0.8, { friction: 0.6, restitution: 0.03, tag: 'ball' });
+        } else if (kind === 1) {
+          b.convex([x, y, z], rockPoints(0.62, rnd, 14), { friction: 0.65, restitution: 0.02 });
+        } else {
+          const m = heightfieldMesh(1.2, 3, (mx, mz) => Math.sin(mx * 3) * Math.cos(mz * 3) * 0.16);
+          b.trimesh([x, y, z], m.vertices, m.indices, { friction: 0.6, restitution: 0.05 });
+        }
+      }
+      b.extent = 16;
+      return b;
+    },
+  },
+
+  {
+    id: 'shape-shells',
+    name: '薄壳堆叠',
+    group: '碰撞形状',
+    description:
+      '厚度只有 6 cm 的板子叠成塔。**薄壳是深度求解的噩梦**：接触面积极小、法线容易翻转，不少求解器会让它们互相渗透或持续抖动。薄板的厚度精度也是各引擎差别最大的地方之一。',
+    defaultBodies: 24,
+    maxBodies: 120,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(140, 1, 0, { friction: 0.9 });
+      const n = Math.max(4, Math.min(60, ctx.bodies));
+      for (let i = 0; i < n; i++) {
+        b.box([0, 0.06 + i * 0.14, 0], [1.4, 0.03, 1.4], {
+          friction: 0.75, restitution: 0, density: 2400,
+        });
+      }
+      b.extent = 12;
+      return b;
+    },
+  },
+
+  {
+    id: 'shape-slices',
+    name: '薄片雨',
+    group: '碰撞形状',
+    description:
+      '上百张薄片从高处飘落。薄片落地时常常**边角先触**，接触法线几乎贴着片平面——这是最容易触发穿透与抖动的姿态，也是检验休眠判定是否可靠的好场景。',
+    defaultBodies: 140,
+    maxBodies: 600,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(180, 1, 0, { friction: 0.85 });
+      const rnd = rng(ctx.seed || 83);
+      const n = Math.max(12, ctx.bodies);
+      for (let i = 0; i < n; i++) {
+        const a = rnd() * Math.PI * 2;
+        const rad = rnd() * 5;
+        b.box(
+          [Math.cos(a) * rad, 3 + (i / n) * 14, Math.sin(a) * rad],
+          [0.5, 0.02, 0.5],
+          {
+            rotation: [rnd() - 0.5, rnd() - 0.5, rnd() - 0.5, 1],
+            friction: 0.7, restitution: 0, density: 1200, angularDamping: 0.1,
+          },
+        );
+      }
+      b.extent = 16;
+      return b;
+    },
+  },
 ];

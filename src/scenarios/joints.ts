@@ -682,4 +682,187 @@ export const JOINT_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'gear-train',
+    name: '齿轮组',
+    group: '约束与关节',
+    description:
+      '四个齿轮只有第一个带电机，其余靠**侧面摩擦传动**。能传过去多少力矩、会不会打滑，取决于求解器对圆柱侧面切向接触的建模——这是纯关节测试看不到的一类问题。',
+    defaultBodies: 12,
+    maxBodies: 40,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = [0, 0, 0];
+      b.ground(120, 1, -8, { friction: 0.8 });
+      const n = Math.max(2, Math.min(6, Math.round(ctx.bodies / 2)));
+      const radius = 1.2;
+      let prevX = -((n - 1) / 2) * radius * 2.05;
+      let prevId: string | null = null;
+      for (let i = 0; i < n; i++) {
+        const x = prevX + i * radius * 2.05;
+        const wheel = b.cylinder([x, 3, 0], radius, 0.3, {
+          rotation: [Math.sin(Math.PI / 4), 0, 0, Math.cos(Math.PI / 4)],
+          density: 2600, friction: 0.9, restitution: 0, tag: 'wheel',
+        });
+        const pin = b.box([x, 3, 0], [0.14, 0.14, 0.14], { type: 'static', tag: 'pivot' });
+        b.joint({
+          id: `gear${i}`, kind: 'revolute',
+          bodyA: pin.id, bodyB: wheel.id,
+          anchorA: [0, 0, 0], anchorB: [0, 0, 0],
+          axis: [0, 0, 1],
+          // Only the first wheel is driven; the rest must be turned by contact.
+          ...(i === 0 ? { motor: { targetVelocity: 8, maxForce: 6000 } } : {}),
+        });
+        prevId = wheel.id;
+        void prevId;
+      }
+      b.extent = 14;
+      return b;
+    },
+  },
+
+  {
+    id: 'scissor-lift',
+    name: '剪叉升降',
+    group: '约束与关节',
+    description:
+      'X 形连杆组成的升降台，底部推一下整体升高。**多节必须保持平行四边形**：任何一节转动关节松动或轴心偏移，平台就会歪斜——比单关节机构更能暴露约束求解的累计误差。',
+    defaultBodies: 20,
+    maxBodies: 60,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.9 });
+      const levels = Math.max(1, Math.min(4, Math.round(ctx.bodies / 6)));
+      const armLen = 2.4;
+      const armHalf = armLen / 2;
+      const thick = 0.13;
+      let baseY = 0.3;
+      let prevTop: [string, string] | null = null;
+      for (let l = 0; l < levels; l++) {
+        const midY = baseY + armHalf * 0.72;
+        const a = b.box([-armHalf * 0.72, midY, -0.6], [armHalf, thick, thick], {
+          rotation: [0, 0, Math.sin(0.62 / 2), Math.cos(0.62 / 2)],
+          density: 1600, friction: 0.7, tag: 'rod',
+        });
+        const c = b.box([armHalf * 0.72, midY, -0.6], [armHalf, thick, thick], {
+          rotation: [0, 0, Math.sin(-0.62 / 2), Math.cos(-0.62 / 2)],
+          density: 1600, friction: 0.7, tag: 'rod',
+        });
+        // Pin the pair together at the crossing point.
+        b.joint({
+          id: `pivot${l}`, kind: 'revolute',
+          bodyA: a.id, bodyB: c.id,
+          anchorA: [0, 0, 0], anchorB: [0, 0, 0],
+          axis: [0, 1, 0],
+        });
+        if (prevTop) {
+          b.joint({
+            id: `linkL${l}`, kind: 'revolute',
+            bodyA: prevTop[0], bodyB: a.id,
+            anchorA: [armHalf, 0, 0], anchorB: [-armHalf, 0, 0],
+            axis: [0, 1, 0],
+          });
+          b.joint({
+            id: `linkR${l}`, kind: 'revolute',
+            bodyA: prevTop[1], bodyB: c.id,
+            anchorA: [armHalf, 0, 0], anchorB: [-armHalf, 0, 0],
+            axis: [0, 1, 0],
+          });
+        } else {
+          const footA = b.box([-armHalf * 1.5, 0.2, -0.6], [0.5, 0.2, 0.5], { type: 'static', tag: 'pivot' });
+          b.joint({
+            id: 'footL', kind: 'revolute',
+            bodyA: footA.id, bodyB: a.id,
+            anchorA: [0, 0, 0], anchorB: [-armHalf, 0, 0],
+            axis: [0, 1, 0],
+          });
+          const footC = b.box([armHalf * 1.5, 0.2, -0.6], [0.5, 0.2, 0.5], { type: 'static', tag: 'pivot' });
+          b.joint({
+            id: 'footR', kind: 'prismatic',
+            bodyA: footC.id, bodyB: c.id,
+            anchorA: [0, 0, 0], anchorB: [-armHalf, 0, 0],
+            axis: [1, 0, 0],
+            limits: [-1.2, 1.2],
+          });
+        }
+        prevTop = [a.id, c.id];
+        baseY += armHalf * 1.44;
+      }
+      if (prevTop) {
+        b.box([0, baseY + 0.3, -0.6], [2.0, 0.25, 1.0], {
+          friction: 0.8, density: 2200, tag: 'platform',
+        });
+      }
+      b.extent = 14;
+      return b;
+    },
+  },
+
+  {
+    id: 'spring-bed',
+    name: '弹簧床',
+    group: '约束与关节',
+    description:
+      '一张由弹簧关节织成的网，上面压几个箱子。**弹簧刚度与阻尼的建模**在这里最直观：床面下沉多少、回弹几下停住、会不会自己持续振荡，各引擎差别很大。',
+    defaultBodies: 40,
+    maxBodies: 120,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.9 });
+      const cols = Math.max(3, Math.min(7, Math.round(Math.sqrt(ctx.bodies / 2))));
+      const spacing = 1.5;
+      const y0 = 4;
+      const grid: string[][] = [];
+      for (let ix = 0; ix < cols; ix++) {
+        grid[ix] = [];
+        for (let iz = 0; iz < cols; iz++) {
+          const post = b.box(
+            [(ix - (cols - 1) / 2) * spacing, y0, (iz - (cols - 1) / 2) * spacing],
+            [0.22, 0.22, 0.22],
+            { density: 700, friction: 0.7, tag: 'platform' },
+          );
+          grid[ix][iz] = post.id;
+        }
+      }
+      // Weave the springs: right and forward neighbours only.
+      for (let ix = 0; ix < cols; ix++) {
+        for (let iz = 0; iz < cols; iz++) {
+          if (ix + 1 < cols) {
+            b.joint({
+              id: `sx${ix}-${iz}`, kind: 'spring',
+              bodyA: grid[ix][iz], bodyB: grid[ix + 1][iz],
+              anchorA: [0, 0, 0], anchorB: [0, 0, 0],
+              restLength: spacing, stiffness: 90, damping: 0.35,
+            });
+          }
+          if (iz + 1 < cols) {
+            b.joint({
+              id: `sz${ix}-${iz}`, kind: 'spring',
+              bodyA: grid[ix][iz], bodyB: grid[ix][iz + 1],
+              anchorA: [0, 0, 0], anchorB: [0, 0, 0],
+              restLength: spacing, stiffness: 90, damping: 0.35,
+            });
+          }
+        }
+      }
+      // The load.
+      const rnd = rng(ctx.seed || 67);
+      const drops = Math.max(1, Math.min(5, Math.round(ctx.bodies / 12)));
+      for (let i = 0; i < drops; i++) {
+        b.box(
+          [(rnd() - 0.5) * cols * spacing * 0.5, y0 + 3 + i * 1.4, (rnd() - 0.5) * cols * spacing * 0.5],
+          [0.5, 0.5, 0.5],
+          { density: 3000, friction: 0.6, tag: 'shell' },
+        );
+      }
+      b.extent = 16;
+      return b;
+    },
+  },
 ];

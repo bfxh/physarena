@@ -282,4 +282,112 @@ export const STRESS_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'stress-long-chain',
+    name: '长链条',
+    group: '极端工况',
+    description:
+      '上百节的链条从高处垂下。**约束链的误差会累积**：每一节的微小偏差都沿着链条放大，所以链尾的漂移量直接反映迭代精度。长链被拉伸变长也是最经典的约束软化现象。',
+    defaultBodies: 100,
+    maxBodies: 300,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(180, 1, 0, { friction: 0.9 });
+      const n = Math.max(8, Math.min(240, ctx.bodies));
+      const link = 0.36;
+      const top = 26;
+      const anchor = b.box([0, top + 0.4, 0], [0.5, 0.4, 0.5], { type: 'static', tag: 'anchor' });
+      const half = link * 0.45;
+      let prev = anchor.id;
+      for (let i = 0; i < n; i++) {
+        const seg = b.box([0, top - i * link, 0], [half, half, half], {
+          friction: 0.4, restitution: 0.02, density: 600, tag: 'rod',
+        });
+        b.joint({
+          id: `link${i}`, kind: 'spherical',
+          bodyA: prev, bodyB: seg.id,
+          anchorA: [0, i === 0 ? -0.4 : -half, 0], anchorB: [0, half, 0],
+        });
+        prev = seg.id;
+      }
+      b.extent = 34;
+      return b;
+    },
+  },
+
+  {
+    id: 'stress-many-tiny',
+    name: '超多微小球',
+    group: '极端工况',
+    description:
+      '近千个半径 8 cm 的小球挤在浅盘里。**这是接触对数量的极限测试**：球越小越多，宽相位筛选与窄相位精算的开销占比就越明显。多数纯 JS 引擎在这个规模会掉到个位数帧率。',
+    defaultBodies: 900,
+    maxBodies: 2400,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(200, 1, 0, { friction: 0.7 });
+      const r = 0.08;
+      const gap = r * 2.1;
+      const side = 6;
+      // A shallow tray so the balls do not simply spread over the whole floor.
+      for (const sx of [-1, 1]) {
+        b.box([sx * side, 0.6, 0], [0.3, 0.6, side], { type: 'static', tag: 'wall' });
+        b.box([0, 0.6, sx * side], [side, 0.6, 0.3], { type: 'static', tag: 'wall' });
+      }
+      const n = Math.max(40, ctx.bodies);
+      const cols = Math.floor((side * 2) / gap);
+      let placed = 0;
+      for (let layer = 0; layer < 60 && placed < n; layer++) {
+        for (let ix = 0; ix < cols && placed < n; ix++) {
+          for (let iz = 0; iz < cols && placed < n; iz++) {
+            b.sphere(
+              [-side + r + ix * gap, r + 0.1 + layer * gap, -side + r + iz * gap],
+              r,
+              { friction: 0.5, restitution: 0.02, density: 800, tag: 'ball' },
+            );
+            placed++;
+          }
+        }
+      }
+      b.extent = 18;
+      return b;
+    },
+  },
+
+  {
+    id: 'stress-slender-rod',
+    name: '细长立杆',
+    group: '极端工况',
+    description:
+      '高宽比 40:1 的细杆立在地上，顶端压着重物。**细长物体是惯量与稳定性的最差组合**：一点数值误差就会慢慢弯折，或者自己抖起来。它也是接触点位置精度最敏感的构型。',
+    defaultBodies: 12,
+    maxBodies: 60,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(160, 1, 0, { friction: 0.95 });
+      const count = Math.max(1, Math.min(8, Math.round(ctx.bodies / 2)));
+      const h = 6;
+      const radius = h / 20 / 2;   // 40:1 height to width
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        const x = Math.cos(a) * 2.4;
+        const z = Math.sin(a) * 2.4;
+        b.cylinder([x, h / 2, z], radius, h / 2, {
+          friction: 0.9, restitution: 0, density: 2000, angularDamping: 0.02,
+        });
+        b.box([x, h + 0.35, z], [0.28, 0.28, 0.28], {
+          friction: 0.8, density: 6000, tag: 'shell',
+        });
+      }
+      b.extent = 14;
+      return b;
+    },
+  },
 ];
