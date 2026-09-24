@@ -110,8 +110,13 @@ export class App {
 
   private els!: {
     engineList: HTMLElement;
+    /** Icon rail shown when the left panel is collapsed. */
+    engineRail: HTMLElement;
+    /** Horizontal scenario picker across the top of the stage column. */
     scenarioList: HTMLElement;
     rendererList: HTMLElement;
+    /** Icon rail shown when the right panel is collapsed. */
+    rendererRail: HTMLElement;
     inspector: HTMLElement;
     /** Persistent container so the metric panel updates without a rebuild. */
     metrics: HTMLElement;
@@ -120,6 +125,8 @@ export class App {
     hud: HTMLElement;
     overlay: HTMLElement;
     controls: HTMLElement;
+    /** The "N engines / M scenarios" readout, filled once the registry loads. */
+    headerCounts: HTMLElement;
   };
 
   constructor(root: HTMLElement) {
@@ -196,7 +203,17 @@ export class App {
     const benchPane = h('div', { class: 'pa-bench', style: 'display:none' });
     const controls = h('div', { class: 'pa-controls' });
 
-    const tabs = h('div', { class: 'pa-tabs' });
+    // The mode strip is gone. 并排对比 and 跑分 still exist - a lab that can only
+    // run one engine at a time cannot answer "which is faster" - but they are
+    // two buttons in the control bar instead of a full row of chrome.
+    const modeButtons = h('div', { class: 'pa-mode-btns' });
+    const scenarioBar = h('div', { class: 'pa-scenario-bar' });
+    // Left empty here: the registry is loaded lazily, so 
+    // at build time is whatever happened to be ready - which is how the header
+    // came to claim "3 engines" next to a list of nine. It is filled in by
+    // renderEngineList(), which runs once the full registry is in hand.
+    const headerCounts = h('span', { text: '' });
+    const headerRight = h('div', { class: 'pa-header-right' }, headerCounts);
     const setMode = (m: Mode) => {
       // A run owns the CPU and its results; switching modes mid-run would
       // rebuild worlds under it and invalidate every sample.
@@ -205,37 +222,50 @@ export class App {
       // Drives the mode-specific CSS, e.g. hiding the HUD in compare mode where
       // it fights the panes and the metrics table for the same corner.
       this.root.dataset.mode = m;
-      for (const btn of tabs.children) {
+      for (const btn of modeButtons.children) {
         (btn as HTMLElement).classList.toggle('on', (btn as HTMLElement).dataset.mode === m);
       }
       stage.style.display = m === 'bench' ? 'none' : '';
+      scenarioBar.style.display = m === 'bench' ? 'none' : '';
       benchPane.style.display = m === 'bench' ? '' : 'none';
       engines.style.display = m === 'bench' ? 'none' : '';
       inspector.style.display = m === 'bench' ? 'none' : '';
       controls.style.display = m === 'bench' ? 'none' : '';
+      headerRight.style.display = m === 'bench' ? 'none' : '';
       this.renderControls();
       if (m === 'bench') this.renderBenchPane();
       else void this.activateForMode();
       this.syncHash();
     };
-    for (const [m, label] of [['sandbox', '沙盒'], ['bench', '跑分'], ['compare', '并排对比']] as [Mode, string][]) {
-      tabs.append(h('button', { dataset: { mode: m }, text: label, onclick: () => setMode(m) }));
+    for (const [m, label] of [['compare', '并排对比'], ['bench', '跑分']] as [Mode, string][]) {
+      modeButtons.append(
+        h('button', { class: 'pa-btn sm', dataset: { mode: m }, text: label, onclick: () => setMode(m) }),
+      );
     }
-    tabs.children[0].classList.add('on');
+    // Clicking an already-active mode button drops back to the sandbox, so the
+    // sandbox needs no button of its own.
+    modeButtons.addEventListener('click', (ev) => {
+      const btn = (ev.target as HTMLElement).closest('button');
+      if (btn?.classList.contains('on')) setMode('sandbox');
+    });
 
     const header = h(
       'header',
       { class: 'pa-header' },
       h('div', { class: 'pa-brand' }, h('b', { text: 'PhysArena' }), h('span', { text: '浏览器物理引擎测试场' })),
-      tabs,
-      h('div', { class: 'pa-header-right' }, h('span', { text: `${this.engines.length} 个引擎 · ${this.scenarios.length} 个场景` })),
+      controls,
+      modeButtons,
+      headerRight,
     );
 
     // stage internals
     this.els = {
       engineList: engines,
-      scenarioList: h('div'),
+      engineRail: h('div', { class: 'pa-rail' }),
+      scenarioList: scenarioBar,
+
       rendererList: h('div'),
+      rendererRail: h('div', { class: 'pa-rail pa-rail-right' }),
       inspector,
       metrics: h('div'),
       stage,
@@ -243,20 +273,29 @@ export class App {
       hud: h('div', { class: 'pa-hud' }),
       overlay: h('div', { class: 'pa-stage-msg', style: 'display:none' }),
       controls,
+      headerCounts,
     };
 
     const sidebarLeft = h('aside', { class: 'pa-panel pa-panel-left' });
     sidebarLeft.append(
       h('div', { class: 'pa-panel-title', text: '物理引擎' }),
       engines,
-      h('div', { class: 'pa-panel-title', text: '测试场景' }),
-      this.els.scenarioList,
+      this.els.engineRail,
     );
+
+    // The scenario picker belongs to the centre column, not to a side panel: it
+    // is the one choice that applies to every mode and to both axes.
+    const stageWrap = h('div', { class: 'pa-stage-wrap' }, this.els.scenarioList, stage);
 
     stage.append(this.els.hud, this.els.overlay);
     benchPane.append(h('aside', { class: 'pa-panel' }, h('div', { class: 'pa-panel-title', text: '跑分设置' }), h('div', { id: 'pa-bench-cfg' })), h('div', { class: 'pa-bench-main', id: 'pa-bench-main' }));
 
-    const shell = h('div', { class: 'pa-shell' }, header, sidebarLeft, stage, inspector, benchPane, controls);
+    // Each side owns its own handle, because the two sides are independent
+    // axes: wanting more viewport is rarely a request to hide *both*.
+    sidebarLeft.append(this.collapseHandle('left'));
+    inspector.append(this.collapseHandle('right'), this.els.rendererRail);
+
+    const shell = h('div', { class: 'pa-shell' }, header, sidebarLeft, stageWrap, inspector, benchPane);
     this.root.append(shell);
 
     stage.append(this.els.overlay);
@@ -267,7 +306,85 @@ export class App {
     this.renderRendererList();
     this.renderInspector();
     this.renderControls();
+    this.renderEngineRail();
+    this.renderRendererRail();
     requestAnimationFrame(() => this.layoutOverlay());
+  }
+
+  /** The collapse handle for a side panel. One definition, two placements. */
+  private collapseHandle(side: 'left' | 'right'): HTMLElement {
+    return h('button', {
+      class: `pa-collapse pa-collapse-${side}`,
+      title: side === 'left' ? '收起物理引擎栏（缩成图标）' : '收起渲染引擎栏（缩成图标）',
+      text: side === 'left' ? '‹' : '›',
+      onclick: () => this.toggleSide(side),
+    });
+  }
+
+  /**
+   * Collapses one side panel down to its icon rail.
+   *
+   * Each side owns its own handle because the two sides are independent axes:
+   * wanting more viewport is rarely a request to hide *both*. The rail keeps
+   * every engine's colour dot visible and clickable, so the axis stays
+   * switchable while collapsed - the point is to reclaim viewport, not to hide
+   * the control.
+   */
+  private toggleSide(side: 'left' | 'right'): void {
+    const shell = this.root.querySelector('.pa-shell');
+    if (!shell) return;
+    shell.classList.toggle(side === 'left' ? 'left-collapsed' : 'right-collapsed');
+    const handle = shell.querySelector(
+      side === 'left' ? '.pa-collapse-left' : '.pa-collapse-right',
+    ) as HTMLElement | null;
+    if (handle) {
+      const collapsed = shell.classList.contains(
+        side === 'left' ? 'left-collapsed' : 'right-collapsed',
+      );
+      handle.textContent = side === 'left' ? (collapsed ? '›' : '‹') : (collapsed ? '‹' : '›');
+      handle.title = collapsed
+        ? '展开侧栏'
+        : side === 'left'
+          ? '收起物理引擎栏（缩成图标）'
+          : '收起渲染引擎栏（缩成图标）';
+    }
+    // The stage changed width; overlays are positioned in pixels.
+    this.layoutOverlay();
+    if (this.mode === 'bench') this.renderBenchPane();
+  }
+
+  /** Physics-engine rail shown while the left panel is collapsed. */
+  private renderEngineRail(): void {
+    const rail = clear(this.els.engineRail);
+    for (const entry of this.engines) {
+      const on = this.mode === 'compare'
+        ? this.compareIds.includes(entry.meta.id)
+        : this.sandboxEngineId === entry.meta.id;
+      rail.append(
+        h('button', {
+          class: `pa-rail-dot${on ? ' on' : ''}`,
+          style: `background:${entry.meta.accent}`,
+          title: entry.meta.name,
+          onclick: () => void this.selectEngine(entry.meta.id),
+        }),
+      );
+    }
+  }
+
+  /** Renderer rail shown while the right panel is collapsed. */
+  private renderRendererRail(): void {
+    const rail = clear(this.els.rendererRail);
+    for (const r of this.renderers) {
+      const on = r.meta.id === this.rendererId;
+      rail.append(
+        h('button', {
+          class: `pa-rail-dot${on ? ' on' : ''}${r.unavailable ? ' off' : ''}`,
+          style: `background:${r.meta.accent}`,
+          title: r.unavailable ? `${r.meta.name}（当前环境不可用）` : r.meta.name,
+          onclick: () => void this.setRenderer(r.meta.id),
+        }),
+      );
+    }
   }
 
   // --------------------------------------------------------------- renderer
@@ -949,6 +1066,8 @@ export class App {
       }
       el.append(card);
     }
+    this.renderEngineRail();
+    this.els.headerCounts.textContent = `${this.engines.length} 个引擎 · ${this.scenarios.length} 个场景`;
   }
 
   /**
@@ -1003,6 +1122,7 @@ export class App {
         ),
       );
     }
+    this.renderRendererRail();
   }
 
   // -------------------------------------------------------------- metrics
@@ -1159,6 +1279,9 @@ export class App {
 
   private renderInspector(): void {
     const el = clear(this.els.inspector);
+    // Chrome first: clearing the panel to rebuild its content also removed the
+    // handle that collapses the panel, and the rail that replaces it.
+    el.append(this.collapseHandle('right'), this.els.rendererRail);
     const slot = this.slot(this.activeIds()[0] ?? '');
     const meta: EngineMeta | undefined = slot?.entry.meta;
     const sim = slot?.sim ?? null;

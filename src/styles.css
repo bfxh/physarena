@@ -312,3 +312,131 @@ table.pa-table td.slow { color: var(--danger); }
    fighting for the same top-left corner. Hide it. */
 [data-mode="compare"] .pa-hud { display: none; }
 [data-mode="compare"] .pa-slot-label { background: #fffffff2; }
+
+/* ---------------------------------------------------------------- layout */
+
+/* Two rows now: the header (which owns the transport controls) and everything
+   else. The scenario bar moved into the centre column, and the side panels
+   became collapsible, so the old four-area grid no longer describes the shell. */
+.pa-shell {
+  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr) 296px;
+}
+
+/* Controls now live inside the header rather than across the bottom. */
+.pa-header .pa-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.pa-mode-btns { display: flex; gap: 6px; align-items: center; }
+.pa-mode-btns .pa-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Centre column: scenario strip on top, viewport below. */
+.pa-stage-wrap {
+  grid-area: 2 / 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The scenario picker, laid out horizontally.
+   Group headings do not survive the move - a row of chips has no room for
+   section titles, and the group is already implied by ordering. */
+.pa-scenario-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+.pa-scenario-bar .pa-group-title { display: none; }
+.pa-scenario-bar .pa-scenario {
+  width: auto;
+  margin: 0;
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+}
+.pa-scenario-bar .pa-scenario b { font-size: 11.5px; }
+.pa-scenario-bar .pa-scenario i { margin-left: 6px; }
+.pa-scenario-bar .pa-scenario.on { border-color: var(--accent); }
+
+.pa-stage-wrap .pa-stage { flex: 1; min-height: 0; }
+
+/* --------------------------------------------------------- collapsible */
+
+.pa-collapse {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--text-dim);
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 5px #14234624;
+  z-index: 6;
+}
+.pa-collapse:hover { background: var(--accent-soft); color: var(--accent); }
+.pa-collapse-left { right: 4px; }
+.pa-collapse-right { left: 4px; }
+
+/* Collapsed: the panel keeps a rail of engine dots, so the axis stays visible
+   and switchable. The point is to reclaim viewport, not to hide the control. */
+.pa-shell.left-collapsed { grid-template-columns: 46px minmax(0, 1fr) 296px; }
+.pa-shell.right-collapsed { grid-template-columns: 272px minmax(0, 1fr) 46px; }
+.pa-shell.left-collapsed .pa-panel-left > *:not(.pa-rail):not(.pa-collapse),
+.pa-shell.right-collapsed .pa-panel-right > *:not(.pa-rail):not(.pa-collapse) {
+  display: none;
+}
+.pa-shell.left-collapsed .pa-collapse-left { right: auto; left: 50%; transform: translate(-50%, -50%) rotate(180deg); }
+.pa-shell.right-collapsed .pa-collapse-right { left: auto; right: 50%; transform: translate(50%, -50%) rotate(180deg); }
+
+.pa-rail {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 0;
+}
+.pa-shell.left-collapsed .pa-panel-left .pa-rail,
+.pa-shell.right-collapsed .pa-panel-right .pa-rail { display: flex; }
+.pa-rail-dot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+}
+.pa-rail-dot.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pa-rail-dot.off { opacity: 0.35; cursor: not-allowed; }
+
+/* The collapse handle is positioned against the panel edge, so the panel has to
+   establish a containing block. */
+.pa-panel { position: relative; }
