@@ -17,7 +17,8 @@
     "drive:bench": "node scripts/arena-drive.mjs bench",
     "verify:renderers": "node scripts/verify-renderers.mjs --engines",
     "probe:jolt": "node scripts/probe-jolt-bodyid.mjs",
-    "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs"
+    "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs",
+    "verify:scenarios": "node scripts/verify-scenarios.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.27.1",

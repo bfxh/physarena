@@ -9,3 +9,7 @@ Thumbs.db
 t.html
 _*.png
 _c-*.png
+
+# 一次性补丁/截图脚手架（不属于产品代码）
+_patch_*.py
+_shot.mjs

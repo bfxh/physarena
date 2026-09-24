@@ -124,6 +124,9 @@ export class App {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    // Set at construction, not only in setMode(), so the first paint already
+    // carries the mode-specific rules.
+    this.root.dataset.mode = this.mode;
   }
 
   async start(): Promise<void> {
@@ -199,6 +202,9 @@ export class App {
       // rebuild worlds under it and invalidate every sample.
       if (this.busy && m !== this.mode) return;
       this.mode = m;
+      // Drives the mode-specific CSS, e.g. hiding the HUD in compare mode where
+      // it fights the panes and the metrics table for the same corner.
+      this.root.dataset.mode = m;
       for (const btn of tabs.children) {
         (btn as HTMLElement).classList.toggle('on', (btn as HTMLElement).dataset.mode === m);
       }
@@ -631,6 +637,12 @@ export class App {
       this.rendererStats = this.viewport.stats();
       this.updateMetrics();
     }
+    // The compare table is built as a snapshot, so it has to be re-taken or it
+    // freezes at whatever the numbers were when the panes were laid out - which
+    // is "no samples yet", i.e. a table of dashes. Every 30 frames: often
+    // enough to read as live, rare enough that rebuilding a few DOM rows costs
+    // nothing next to a physics step.
+    if (this.mode === 'compare' && this.metricsAccum % 30 === 0) this.refreshComparePanel();
   };
 
   private metricsAccum = 0;
@@ -690,7 +702,7 @@ export class App {
       this.viewport?.resize();
       const stage = this.els?.stage;
       if (!stage) return;
-      for (const el of [...stage.querySelectorAll('.pa-slot-label')]) el.remove();
+      for (const el of [...stage.querySelectorAll('.pa-slot-label, .pa-slot-compare')]) el.remove();
       if (this.mode !== 'compare') return;
       const ids = this.compareIds;
       const rects = slotRects(ids.length, stage.clientWidth, stage.clientHeight);
@@ -698,21 +710,190 @@ export class App {
         const s = this.slot(id);
         const r = rects[i];
         if (!r) return;
+        // Top-right, not top-left: the HUD already owns the top-left corner of
+        // the stage, and in compare mode the two overlapped into an unreadable
+        // stack of two lines from different widgets.
         const label = h(
           'div',
-          { class: 'pa-slot-label', style: `left:${r.x + 12}px; top:${r.y + 12}px;` },
+          {
+            class: 'pa-slot-label',
+            style: `left:${r.x + r.w - 12}px; top:${r.y + 12}px; transform:translateX(-100%)`,
+          },
           h('i', { class: 'pa-dot', style: `background:${s?.entry.meta.accent ?? '#888'}` }),
           s?.entry.meta.name ?? id,
           h('small', { text: s?.sim ? `${s.sim.timing.p50.toFixed(2)}ms` : '加载中' }),
         );
         this.els.stage.append(label);
       });
+      // The numbers that make it a comparison rather than two pictures.
+      if (ids.length > 1) this.els.stage.append(this.comparePanel());
     } finally {
       this.layoutBusy = false;
     }
   }
 
   // -------------------------------------------------------------- rendering
+
+  /**
+   * Metrics table for the engines in the comparison.
+   *
+   * Two panes side by side answer "do they look the same". They cannot answer
+   * "which one is faster, and by how much" - the eye would have to time two
+   * animations running at their own pace, and when one drops frames the panes
+   * do not even show the same moment of the simulation. So the numbers go under
+   * the panes, best and worst are marked per column, and the relative cost is
+   * spelled out rather than left as mental arithmetic.
+   */
+  private comparePanel(): HTMLElement {
+    interface Row {
+      id: string;
+      name: string;
+      accent: string;
+      p50: number | null;
+      p95: number | null;
+      dynamic: number | null;
+      contacts: number | null;
+      memory: number | null;
+      fps: number | null;
+      simTime: number | null;
+      steps: number | null;
+    }
+    const rows: Row[] = this.compareIds.map((id) => {
+      const s = this.slot(id);
+      const sim = s?.sim ?? null;
+      const t = sim ? sim.timing : null;
+      const st = this.engineStatsFor(id);
+      // A p50 built from a handful of steps is noise, not a measurement.
+      const enough = !!t && t.samples > 8;
+      return {
+        id,
+        name: s?.entry.meta.name ?? id,
+        accent: s?.entry.meta.accent ?? '#8d97a6',
+        p50: enough ? t.p50 : null,
+        p95: enough ? t.p95 : null,
+        dynamic: sim ? sim.dynamicCount : null,
+        contacts: st?.contactCount ?? null,
+        memory: st?.memoryBytes ?? null,
+        fps: sim ? this.slotFps(id) : null,
+        simTime: sim ? sim.simTime : null,
+        steps: sim ? sim.steps : null,
+      };
+    });
+
+    const num = (v: number | null, digits = 2, unit = '') =>
+      (v === null || !Number.isFinite(v) ? '—' : `${v.toFixed(digits)}${unit}`);
+    const int = (v: number | null) => (v === null ? '—' : v.toLocaleString('en-US'));
+
+    const fastestP50 = rows.reduce<number | null>(
+      (best, r) => (r.p50 === null ? best : best === null ? r.p50 : Math.min(best, r.p50)),
+      null,
+    );
+
+    type Col = { label: string; cell: (r: Row) => string; rank: (r: Row) => number | null; lowerWins: boolean };
+    const cols: Col[] = [
+      { label: '步 p50', cell: (r) => num(r.p50, 2, ' ms'), rank: (r) => r.p50, lowerWins: true },
+      { label: '步 p95', cell: (r) => num(r.p95, 2, ' ms'), rank: (r) => r.p95, lowerWins: true },
+      { label: '物理 FPS', cell: (r) => (r.fps === null ? '—' : r.fps.toFixed(0)), rank: (r) => r.fps, lowerWins: false },
+      { label: '仿真时间', cell: (r) => (r.simTime === null ? '—' : r.simTime.toFixed(1) + ' s'), rank: (r) => r.simTime, lowerWins: false },
+      { label: '步数', cell: (r) => int(r.steps), rank: () => null, lowerWins: false },
+      { label: '动态刚体', cell: (r) => int(r.dynamic), rank: () => null, lowerWins: false },
+      { label: '接触对', cell: (r) => int(r.contacts), rank: () => null, lowerWins: false },
+      { label: '内存', cell: (r) => (r.memory === null ? '—' : fmtBytes(r.memory)), rank: (r) => r.memory, lowerWins: true },
+      {
+        label: '相对最快',
+        cell: (r) => (r.p50 !== null && fastestP50 ? `${(r.p50 / fastestP50).toFixed(2)}×` : '—'),
+        rank: () => null,
+        lowerWins: false,
+      },
+    ];
+
+    const body = rows.map((r) => {
+      const cells = cols.map((c) => {
+        const mine = c.rank(r);
+        let cls = 'num';
+        if (c.lowerWins && mine !== null) {
+          const all = rows.map(c.rank).filter((v): v is number => v !== null && Number.isFinite(v));
+          if (all.length > 1) {
+            const best = Math.min(...all);
+            const worst = Math.max(...all);
+            if (best !== worst && mine === best) cls = 'num win';
+            else if (best !== worst && mine === worst) cls = 'num slow';
+          }
+        }
+        return h('td', { class: cls, text: c.cell(r) });
+      });
+      return h(
+        'tr',
+        {},
+        h(
+          'td',
+          {},
+          h('i', {
+            class: 'pa-dot',
+            style: `background:${r.accent}; display:inline-block; margin-right:6px; vertical-align:middle`,
+          }),
+          r.name,
+        ),
+        ...cells,
+      );
+    });
+
+    const anyMissing = rows.some((r) => r.contacts === null || r.memory === null);
+    const notes: string[] = [
+      '同一场景、同一负载；绿色为该列最优，红色为最差。',
+      '两边各自积分：帧率不同就会停在不同仿真时刻，「相对最快」只在步数接近时才读得准——先看这两列。',
+    ];
+    const spread = rows.map((r) => r.steps).filter((v): v is number => v !== null);
+    if (spread.length > 1 && Math.max(...spread) > Math.min(...spread) * 1.5) {
+      notes.push('⚠ 当前两边步数相差较大，耗时对比仅供参考；点「重置」可让它们从同一时刻重新开始。');
+    }
+    if (anyMissing) {
+      notes.push('「—」表示该引擎不暴露这项数据，不是 0——接触对与内存由各引擎自行报告。');
+    }
+    if (rows.some((r) => r.p50 === null)) {
+      notes.push('样本不足的引擎先记为「—」，跑满 8 步以上才会出数。');
+    }
+
+    return h(
+      'div',
+      { class: 'pa-slot-compare' },
+      h('div', { class: 'pa-compare-head' },
+        h('b', { text: `并排对比 · ${rows.length} 个引擎` }),
+        h('span', { class: 'pa-compare-sub', text: '同场景同负载，指标逐列对照' })),
+      h('div', { class: 'pa-scroll-x' },
+        h('table', { class: 'pa-table' },
+          h('thead', {}, h('tr', {}, h('th', { text: '引擎' }), ...cols.map((c) => h('th', { text: c.label })))),
+          h('tbody', {}, ...body))),
+      ...notes.map((t) => h('div', { class: 'pa-note' }, t)),
+    );
+  }
+
+  /**
+   * Replaces the compare table in place, keeping its position in the stage.
+   *
+   * Rebuilding the whole node is deliberate: the table is at most four rows,
+   * and reusing cells would mean threading a diff through every column for no
+   * measurable gain.
+   */
+  private refreshComparePanel(): void {
+    if (this.mode !== 'compare' || this.compareIds.length < 2) return;
+    const stage = this.els?.stage;
+    if (!stage) return;
+    const old = stage.querySelector('.pa-slot-compare');
+    if (!old) return;
+    old.replaceWith(this.comparePanel());
+  }
+
+  /** Per-slot physics FPS, derived from the same window the HUD uses. */
+  private slotFps(id: string): number | null {
+    const sim = this.slot(id)?.sim;
+    if (!sim) return null;
+    const dt = sim.fixedDt;
+    const p50 = sim.timing.p50;
+    // Only meaningful while the step actually fits the fixed budget; below 1/dp
+    // the readout would just restate the frame rate of the browser.
+    return p50 > 0 ? Math.min(1 / dt, 1000 / p50) : null;
+  }
 
   private renderEngineList(): void {
     const el = clear(this.els.engineList);
@@ -809,7 +990,7 @@ export class App {
               : null,
           ),
           blocked
-            ? h('div', { class: 'pa-engine-msg', text: '当前环境不可用：' + entry.unavailable })
+            ? h('div', { class: 'pa-engine-msg', text: '当前环境不可用：' + firstSentence(entry.unavailable) })
             : null,
         ),
       );
@@ -1274,6 +1455,25 @@ export class App {
       resourceInfo: () => this.viewport.stats(),
       /** Diagnostic: per-layer instance matrix decomposition. */
       renderProbe: () => this.viewport.probe(),
+      /** Scenario catalogue, so a script can enumerate without scraping the DOM. */
+      listScenarios: () => SCENARIOS.map((s) => ({ id: s.id, name: s.name, group: s.group })),
+      /**
+       * Fluid solver readout, or null when the scene has no fluid volume.
+       *
+       * Exposed because a renderer probe cannot identify fluid particles - all
+       * bodies in a scene share one layer, so there is no way to tell the water
+       * from the walls by looking at instance transforms. `spanY` is the honest
+       * signal that the liquid is levelling out.
+       */
+      fluidStats: () => {
+        // Scans every active pane rather than assuming the sandbox slot: in
+        // split mode the fluid may live in any of them.
+        for (const id of this.activeIds()) {
+          const f = this.slot(id)?.sim?.fluidStats();
+          if (f) return f;
+        }
+        return null;
+      },
       /** Renderer axis, scriptable: list / read current / hot-swap. */
       listRenderers: () =>
         this.renderers.map((r) => ({ ...r.meta, unavailable: r.unavailable ?? null })),
@@ -1704,6 +1904,21 @@ function scenarioFitRows(sim: Simulation, meta: EngineMeta): HTMLElement[] {
     rows.push(h('div', { class: 'pa-note', text: '✓ 本场景用到的形状与关节，当前引擎全部支持。' }));
   }
   return rows;
+}
+
+/**
+ * First sentence of a long explanation.
+ *
+ * The unavailability notes run to four or five lines, and five of those stacked
+ * down the renderer panel buried the list they were annotating. The full text
+ * stays available in the card's `title`, so nothing is lost - it just is not
+ * shouted.
+ */
+function firstSentence(s: string): string {
+  const stops = [s.indexOf('。'), s.indexOf('. ')].filter((i) => i > 0);
+  if (stops.length === 0) return s;
+  const i = Math.min(...stops);
+  return i < s.length - 2 ? s.slice(0, i + 1) : s;
 }
 
 function kindLabel(kind: GuardKind): string {

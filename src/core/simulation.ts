@@ -1,5 +1,6 @@
-import type { IPhysicsEngine, Vec3, WorldDesc } from './types';
+import type { BodyDesc, BodyState, FluidSpec, IPhysicsEngine, Vec3, WorldDesc } from './types';
 import { RollingWindow, type TimingSummary } from './stats';
+import { FluidSolver, WATER, type FluidConfig, type FluidObstacle } from '../fluid/pbf';
 import type { Scenario } from '../scenarios/types';
 
 export interface SimulationOptions {
@@ -37,6 +38,17 @@ export class Simulation {
   totalStepMs = 0;
 
   private states: ReturnType<IPhysicsEngine['readStates']> = [];
+  /**
+   * The PBF solver for scenes that contain a fluid volume, else null.
+   *
+   * Fluids are stepped here rather than by an engine: none of the nine
+   * solvers implements SPH, and a pile of rigid spheres is not a fluid -
+   * it has no pressure term, so it will not level out or pour.
+   * See src/fluid/pbf.ts.
+   */
+  private fluid: FluidSolver | null = null;
+  /** Rigid bodies handed to the engine; fluid particles follow them in states. */
+  rigidCount = 0;
 
   constructor(opts: SimulationOptions) {
     this.opts = opts;
@@ -58,11 +70,63 @@ export class Simulation {
     this.contentRadius = builder.contentRadius;
     this.contentCenter = builder.contentCenter;
     this.dynamicCount = builder.dynamicCount;
+
+    const rigid = world.bodies.filter((b) => !b.fluid);
+    const particles = world.bodies.filter((b) => b.fluid);
     const t0 = performance.now();
-    this.engine.build(world);
+    // The engine is handed the rigid bodies only. Fluid particles are stepped
+    // by the PBF solver instead; letting an engine integrate them too would
+    // fight the solver and double-count contact forces.
+    this.engine.build({ ...world, bodies: rigid });
     this.buildMs = performance.now() - t0;
+
+    this.fluid = this.buildFluid(world.fluid, particles);
+    this.rigidCount = rigid.length;
     this.states = this.engine.readStates();
     this.resetClock();
+  }
+
+  /**
+   * Creates the PBF solver for a scene's fluid volume, if it has one.
+   *
+   * Returns null when the scene has no fluid (the common case), so every
+   * existing scenario runs through exactly the path it did before.
+   */
+  private buildFluid(spec: FluidSpec | undefined, particles: BodyDesc[]): FluidSolver | null {
+    if (!spec || particles.length === 0) return null;
+    const cfg: FluidConfig = {
+      ...WATER,
+      restDensity: spec.restDensity ?? WATER.restDensity,
+      h: spec.h ?? WATER.h,
+      spacing: spec.spacing ?? WATER.spacing,
+      iterations: spec.iterations ?? WATER.iterations,
+      vorticity: spec.vorticity ?? WATER.vorticity,
+      viscosity: spec.viscosity ?? WATER.viscosity,
+      sCorrDeltaQ: (spec.spacing ?? WATER.spacing) * 0.2 * (spec.h ?? WATER.h),
+    };
+    const solver = new FluidSolver(cfg, particles.length);
+    solver.setBounds(0, spec.halfX, spec.halfZ, spec.ceiling);
+    solver.setGravity(this.opts.gravity);
+    for (const p of particles) {
+      solver.addParticle(
+        p.position[0], p.position[1], p.position[2],
+        p.velocity?.[0] ?? 0, p.velocity?.[1] ?? 0, p.velocity?.[2] ?? 0,
+      );
+    }
+    // Static scenery becomes fluid obstacles, so liquid poured onto a ramp
+    // actually runs down it instead of passing through.
+    const boxes: FluidObstacle[] = [];
+    for (const b of this.world?.bodies ?? []) {
+      if (b.type !== 'static') continue;
+      if (b.shape.kind !== 'box') continue;
+      const half = b.shape.halfExtents;
+      boxes.push({
+        min: [b.position[0] - half[0], b.position[1] - half[1], b.position[2] - half[2]],
+        max: [b.position[0] + half[0], b.position[1] + half[1], b.position[2] + half[2]],
+      });
+    }
+    solver.setObstacles(boxes);
+    return solver;
   }
 
   extent = 20;
@@ -107,6 +171,10 @@ export class Simulation {
     if (!this.engine) return;
     const t0 = performance.now();
     this.engine.step(this.fixedDt);
+    // The fluid runs inside the same timed block on purpose: from the frame
+    // budget point of view there is no difference between the engine being
+    // slow and the fluid being slow, so the panel shows the combined cost.
+    this.fluid?.step(this.fixedDt);
     const dt = performance.now() - t0;
     this.lastStepMs = dt;
     this.totalStepMs += dt;
@@ -121,15 +189,66 @@ export class Simulation {
     if (!this.engine) return;
     for (let i = 0; i < n; i++) {
       this.engine.step(this.fixedDt);
+      this.fluid?.step(this.fixedDt);
       this.steps++;
       this.simTime += this.fixedDt;
     }
   }
 
-  readStates() {
+  /**
+   * Engine states followed by fluid particle states.
+   *
+   * The order matches `world.bodies` (rigid first, fluid last - enforced in
+   * SceneBuilder.finish), because renderers index their instance transforms
+   * positionally. Appending rather than interleaving keeps this cheap: no
+   * per-frame merge, no map, and the engine array is reused untouched.
+   */
+  readStates(): BodyState[] {
     if (!this.engine) return this.states;
     this.states = this.engine.readStates();
-    return this.states;
+    if (!this.fluid) return this.states;
+    const out: BodyState[] = this.states.slice();
+    const f = this.fluid;
+    for (let i = 0; i < f.count; i++) {
+      const q = i * 3;
+      out.push({
+        position: [f.pos[q], f.pos[q + 1], f.pos[q + 2]],
+        rotation: [0, 0, 0, 1],
+        linearVelocity: [f.vel[q], f.vel[q + 1], f.vel[q + 2]],
+        angularVelocity: [0, 0, 0],
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Fluid statistics for the metrics panel, or null when the scene has none.
+   *
+   * `spanY` is the number that distinguishes a real fluid from a sphere pile:
+   * poured in as a column and left alone, it has to shrink.
+   */
+  fluidStats(): {
+    particles: number;
+    avgNeighbours: number;
+    maxNeighbours: number;
+    iterations: number;
+    minY: number;
+    maxY: number;
+    avgY: number;
+    spanY: number;
+  } | null {
+    if (!this.fluid) return null;
+    const f = this.fluid;
+    return {
+      particles: f.count,
+      avgNeighbours: f.lastAvgNeighbours,
+      maxNeighbours: f.lastMaxNeighbours,
+      iterations: f.cfg.iterations,
+      minY: f.lastMinY,
+      maxY: f.lastMaxY,
+      avgY: f.lastAvgY,
+      spanY: f.lastMaxY - f.lastMinY,
+    };
   }
 
   get timing(): TimingSummary {

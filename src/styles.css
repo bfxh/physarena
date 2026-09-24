@@ -269,3 +269,46 @@ table.pa-table td.slow { color: var(--danger); }
   border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel-2);
   font-size: 11px; color: var(--text-dim);
 }
+
+/* ---------------------------------------------------------- compare panel */
+/* Floating metrics table under the side-by-side panes. This is the part that
+   turns two animations into a comparison: the eye cannot time two simulations
+   running at their own pace, and when one drops frames the panes are not even
+   showing the same moment of the simulation. */
+.pa-slot-compare {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-height: 46%;
+  overflow: auto;
+  padding: 10px 12px;
+  background: #ffffffed;
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 14px #1423461c;
+}
+.pa-compare-head { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; }
+.pa-compare-head b { font-size: 12.5px; }
+.pa-compare-sub { color: var(--text-faint); font-size: 11px; }
+.pa-slot-compare table.pa-table th { background: #ffffffed; }
+.pa-slot-compare .pa-note { margin-top: 5px; }
+
+/* Long blurbs were the reason the engine list needed scrolling just to compare
+   two engines. Clamp to two lines; the full text appears on hover or select.
+   Deliberately NOT -webkit-line-clamp: the CSS minifier rewrites
+    to , which silently kills the
+   clamp and leaves the full paragraph visible. max-height survives minification. */
+.pa-engine-blurb {
+  max-height: 2.9em;
+  overflow: hidden;
+}
+.pa-engine:hover .pa-engine-blurb,
+.pa-engine.on .pa-engine-blurb { max-height: none; }
+
+/* Compare mode: the per-pane labels carry the headline number and the metrics
+   table carries the detail, so the HUD is a third copy of the same information
+   fighting for the same top-left corner. Hide it. */
+[data-mode="compare"] .pa-hud { display: none; }
+[data-mode="compare"] .pa-slot-label { background: #fffffff2; }

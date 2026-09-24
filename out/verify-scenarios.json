@@ -1,0 +1,51 @@
+{
+  "at": "2026-09-24T11:08:22.378Z",
+  "base": "http://localhost:4173",
+  "results": [
+    {
+      "id": "pbf-pool",
+      "group": "破坏与流体",
+      "ok": true,
+      "nan": false,
+      "bodies": 851,
+      "joints": "0",
+      "step": "1.10",
+      "fps": "860",
+      "spanEarly": null,
+      "spanLate": null,
+      "levelled": null,
+      "ms": 12242
+    },
+    {
+      "id": "pbf-dam",
+      "group": "破坏与流体",
+      "ok": true,
+      "nan": false,
+      "bodies": 1351,
+      "joints": "0",
+      "step": "2.97",
+      "fps": "338",
+      "spanEarly": null,
+      "spanLate": null,
+      "levelled": null,
+      "ms": 12246
+    },
+    {
+      "id": "pbf-ramp",
+      "group": "破坏与流体",
+      "ok": true,
+      "nan": false,
+      "bodies": 326,
+      "joints": "0",
+      "step": "0.945",
+      "fps": "1,017",
+      "spanEarly": null,
+      "spanLate": null,
+      "levelled": null,
+      "ms": 12240
+    }
+  ],
+  "problems": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

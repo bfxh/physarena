@@ -54,6 +54,17 @@ export interface BodyDesc {
   velocity?: Vec3;
   /** Initial angular velocity (rad/s), used by the spinning-top scenarios. */
   angularVelocity?: Vec3;
+  /**
+   * Marks a particle owned by the fluid solver rather than by the physics
+   * engine.
+   *
+   * Fluid bodies are still listed in the world so every renderer draws them -
+   * but the engine never sees them, because their motion comes from the PBF
+   * solver instead of from rigid-body dynamics. Running both would double-count
+   * the forces. This is why the renderer axis needs no change at all to support
+   * real fluids.
+   */
+  fluid?: boolean;
 }
 
 export type JointKind =
@@ -85,6 +96,32 @@ export interface WorldDesc {
   joints: JointDesc[];
   /** Suggested sub-stepping; adapters may ignore it. */
   substeps?: number;
+  /** Present when the scene contains a fluid volume; see BodyDesc.fluid. */
+  fluid?: FluidSpec;
+}
+
+/**
+ * Parameters for the fluid volume in a scene.
+ *
+ * The particle positions are authored through the scene builder like any other
+ * body (so they land in  with ); this only carries the
+ * solver settings and the static colliders the fluid should respect.
+ */
+export interface FluidSpec {
+  /** Rest density and kernel radius; see src/fluid/pbf.ts. */
+  restDensity?: number;
+  h?: number;
+  spacing?: number;
+  iterations?: number;
+  vorticity?: number;
+  viscosity?: number;
+  /** Draw radius multiplier: >1 makes neighbouring spheres overlap into a surface. */
+  renderScale?: number;
+  /** Half-extent of the tank the fluid is clamped inside. */
+  halfX: number;
+  halfZ: number;
+  /** Y height above which particles are pushed back down (i.e. the open top). */
+  ceiling: number;
 }
 
 export interface BodyState {

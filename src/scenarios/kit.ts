@@ -1,5 +1,5 @@
 import type {
-  BodyDesc, BodyType, JointDesc, ShapeDesc, Vec3, Quat, WorldDesc,
+  BodyDesc, BodyType, FluidSpec, JointDesc, ShapeDesc, Vec3, Quat, WorldDesc,
 } from '../core/types';
 import { IDENTITY_QUAT } from '../core/types';
 
@@ -200,8 +200,71 @@ export class SceneBuilder {
     return j;
   }
 
+  /** Set by fluidVolume(); carried into the world so the host can build a solver. */
+  private fluidSpec?: FluidSpec;
+
+  /**
+   * Fills an axis-aligned box with fluid particles.
+   *
+   * The particles are emitted as ordinary sphere bodies with `fluid: true`, so
+   * every renderer draws them through the code path it already has - no backend
+   * needs to know fluids exist. The drawn radius is deliberately larger than
+   * the solver spacing so neighbouring spheres overlap; that overlap is what
+   * reads as a surface instead of as a bag of marbles.
+   *
+   * Note the deliberate asymmetry: `spacing` drives the solver (density,
+   * neighbour counts), `spacing * 2.6` only drives how big the spheres look.
+   */
+  fluidVolume(
+    min: Vec3,
+    max: Vec3,
+    opts: Partial<FluidSpec> & { renderScale?: number } = {},
+  ): FluidSpec {
+    const spacing = opts.spacing ?? 0.3;
+    const renderScale = opts.renderScale ?? 2.6;
+    const r = spacing * 0.5;
+    for (let y = min[1] + r; y <= max[1] + 1e-6; y += spacing) {
+      for (let x = min[0] + r; x <= max[0] + 1e-6; x += spacing) {
+        for (let z = min[2] + r; z <= max[2] + 1e-6; z += spacing) {
+          this.sphere([x, y, z], r * renderScale, {
+            fluid: true,
+            tag: "fluid",
+            density: opts.restDensity ?? 1000,
+            friction: 0.02,
+            restitution: 0.0,
+          });
+        }
+      }
+    }
+    this.fluidSpec = {
+      restDensity: opts.restDensity,
+      h: opts.h,
+      spacing,
+      iterations: opts.iterations,
+      vorticity: opts.vorticity,
+      viscosity: opts.viscosity,
+      renderScale,
+      halfX: Math.max(Math.abs(min[0]), Math.abs(max[0])) + 0.5,
+      halfZ: Math.max(Math.abs(min[2]), Math.abs(max[2])) + 0.5,
+      ceiling: max[1] + 6,
+    };
+    return this.fluidSpec;
+  }
+
   finish(substeps?: number): WorldDesc {
-    return { gravity: this.gravity, bodies: this.bodies, joints: this.joints, substeps };
+    // Fluid particles are moved to the end of the body list. Renderers index
+    // their state arrays by position, and the engine only ever sees the rigid
+    // bodies - so putting the fluid last is what lets readStates() simply
+    // append the solver output instead of interleaving it.
+    const rigid = this.bodies.filter((x) => !x.fluid);
+    const fluid = this.bodies.filter((x) => x.fluid);
+    return {
+      gravity: this.gravity,
+      bodies: rigid.concat(fluid),
+      joints: this.joints,
+      substeps,
+      fluid: this.fluidSpec,
+    };
   }
 }
 
