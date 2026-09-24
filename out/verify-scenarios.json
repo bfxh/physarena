@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-24T12:43:00.395Z",
+  "at": "2026-09-24T13:16:44.853Z",
   "base": "http://localhost:4173",
   "results": [
     {
@@ -9,12 +9,14 @@
       "nan": false,
       "bodies": 851,
       "joints": "0",
-      "step": "0.768",
-      "fps": "1,251",
-      "spanEarly": null,
-      "spanLate": null,
-      "levelled": null,
-      "ms": 12233
+      "step": "4.37",
+      "fps": "220",
+      "spanEarly": 2.3,
+      "spanLate": 2.31,
+      "neighbours": 21.8,
+      "packed": true,
+      "settled": true,
+      "ms": 12231
     },
     {
       "id": "pbf-dam",
@@ -23,12 +25,14 @@
       "nan": false,
       "bodies": 1351,
       "joints": "0",
-      "step": "2.18",
-      "fps": "450",
-      "spanEarly": null,
-      "spanLate": null,
-      "levelled": null,
-      "ms": 12251
+      "step": "7.19",
+      "fps": "134",
+      "spanEarly": 3.72,
+      "spanLate": 3.57,
+      "neighbours": 22.8,
+      "packed": true,
+      "settled": true,
+      "ms": 12234
     },
     {
       "id": "pbf-ramp",
@@ -37,12 +41,14 @@
       "nan": false,
       "bodies": 326,
       "joints": "0",
-      "step": "0.557",
-      "fps": "1,718",
-      "spanEarly": null,
-      "spanLate": null,
-      "levelled": null,
-      "ms": 12226
+      "step": "1.84",
+      "fps": "503",
+      "spanEarly": 1.79,
+      "spanLate": 1.79,
+      "neighbours": 20.1,
+      "packed": true,
+      "settled": true,
+      "ms": 12240
     }
   ],
   "problems": []

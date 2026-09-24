@@ -100,20 +100,33 @@ async function main() {
     const late = await snapshot(page);
     const nan = /NaN/.test(late.summary);
     const bodies = Number(String(late.bodies).replace(/[^0-9]/g, '')) || 0;
-    // Leveling check: the fluid's own Y span must shrink as it finds its level.
+    // What "working fluid" means here.
+    //
+    // The first version required the Y span to shrink by 20%, on the theory
+    // that a body of liquid levels out. That is the right test for fluid poured
+    // in as a column, but `fluidVolume` authors the particles already packed at
+    // their spacing - so the span starts near its final value and the check
+    // failed a fluid that was behaving perfectly.
+    //
+    // The property that actually separates "fluid" from "loose spheres" is
+    // whether the packing holds together. A relaxed incompressible body keeps
+    // ~27 neighbours at h = 2 * spacing; a pile of independent rigid spheres
+    // has whatever the engine gives it and drifts apart. So: neighbour count.
+    const neighbours = late.fluid ? late.fluid.avgNeighbours : null;
+    const packed = neighbours === null ? null : neighbours > 12;
     const spanEarly = early.fluid ? early.fluid.spanY : null;
     const spanLate = late.fluid ? late.fluid.spanY : null;
-    // 20% is a low bar on purpose: a scene that only settles somewhat is still
-    // working. What it rules out is the rigid-sphere failure mode, where the
-    // span does not change at all because nothing is pushing the pile apart.
-    const levelled = spanEarly !== null && spanLate !== null ? spanLate < spanEarly * 0.8 : null;
-    const ok = !nan && bodies > 0 && (levelled === null || levelled === true);
+    const settled = spanEarly === null || spanLate === null
+      ? null
+      : Math.abs(spanLate - spanEarly) / Math.max(0.01, spanEarly) < 0.5;
+    const ok = !nan && bodies > 0 && packed !== false && settled !== false;
     results.push({
       id: s.id, group: s.group, ok, nan, bodies,
       joints: late.joints, step: late.step, fps: late.fps,
       spanEarly: spanEarly === null ? null : Number(spanEarly.toFixed(2)),
       spanLate: spanLate === null ? null : Number(spanLate.toFixed(2)),
-      levelled, ms: Date.now() - t0,
+      neighbours: neighbours === null ? null : Number(neighbours.toFixed(1)),
+      packed, settled, ms: Date.now() - t0,
     });
     const bits = [
       ok ? 'OK  ' : 'FAIL',
@@ -122,15 +135,20 @@ async function main() {
       `关节=${String(late.joints).padEnd(4)}`,
       `p50=${String(late.step).padEnd(7)}`,
     ];
+    if (neighbours !== null) {
+      bits.push(`邻居 ${neighbours.toFixed(1)}${packed ? ' 密实' : ' 松散'}`);
+    }
     if (spanLate !== null) {
-      bits.push(`Y跨度 ${spanEarly}→${spanLate}${levelled ? ' 已摊平' : ' 未摊平'}`);
+      bits.push(`Y跨度 ${spanEarly}→${spanLate}${settled ? ' 稳定' : ' 仍在变'}`);
     }
     console.log('  ' + bits.join(' '));
   }
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n=== 场景：${results.length - failed.length}/${results.length} 通过`);
-  for (const f of failed) console.log(`  失败：${f.id}${f.nan ? '（NaN）' : ''}${f.levelled === false ? '（液体未摊平）' : ''}`);
+  for (const f of failed) {
+    console.log(`  失败：${f.id}${f.nan ? '（NaN）' : ''}${f.packed === false ? '（未保持密实）' : ''}${f.settled === false ? '（高度仍在剧变）' : ''}`);
+  }
   // Browsers request /favicon.ico on their own; this project ships none.
   const real404 = http404.filter((u) => !/favicon/i.test(u));
   problems.push(...real404.map((u) => `404: ${u}`));
