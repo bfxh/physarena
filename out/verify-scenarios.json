@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-24T11:08:22.378Z",
+  "at": "2026-09-24T12:43:00.395Z",
   "base": "http://localhost:4173",
   "results": [
     {
@@ -9,12 +9,12 @@
       "nan": false,
       "bodies": 851,
       "joints": "0",
-      "step": "1.10",
-      "fps": "860",
+      "step": "0.768",
+      "fps": "1,251",
       "spanEarly": null,
       "spanLate": null,
       "levelled": null,
-      "ms": 12242
+      "ms": 12233
     },
     {
       "id": "pbf-dam",
@@ -23,12 +23,12 @@
       "nan": false,
       "bodies": 1351,
       "joints": "0",
-      "step": "2.97",
-      "fps": "338",
+      "step": "2.18",
+      "fps": "450",
       "spanEarly": null,
       "spanLate": null,
       "levelled": null,
-      "ms": 12246
+      "ms": 12251
     },
     {
       "id": "pbf-ramp",
@@ -37,15 +37,13 @@
       "nan": false,
       "bodies": 326,
       "joints": "0",
-      "step": "0.945",
-      "fps": "1,017",
+      "step": "0.557",
+      "fps": "1,718",
       "spanEarly": null,
       "spanLate": null,
       "levelled": null,
-      "ms": 12240
+      "ms": 12226
     }
   ],
-  "problems": [
-    "Failed to load resource: the server responded with a status of 404 (Not Found)"
-  ]
+  "problems": []
 }
