@@ -239,15 +239,22 @@ export class App {
     };
     for (const [m, label] of [['compare', '并排对比'], ['bench', '跑分']] as [Mode, string][]) {
       modeButtons.append(
-        h('button', { class: 'pa-btn sm', dataset: { mode: m }, text: label, onclick: () => setMode(m) }),
+        h('button', {
+          class: 'pa-btn sm',
+          dataset: { mode: m },
+          text: label,
+          onclick: () => {
+            // Toggle, decided *here* rather than in a bubbled listener on the
+            // container. The container version could not work: the click had
+            // already added the `on` class by the time it bubbled up, so every
+            // first click looked like "clicked while active" and dropped
+            // straight back to the sandbox - the button was dead on arrival.
+            if (this.mode === m) setMode('sandbox');
+            else setMode(m);
+          },
+        }),
       );
     }
-    // Clicking an already-active mode button drops back to the sandbox, so the
-    // sandbox needs no button of its own.
-    modeButtons.addEventListener('click', (ev) => {
-      const btn = (ev.target as HTMLElement).closest('button');
-      if (btn?.classList.contains('on')) setMode('sandbox');
-    });
 
     const header = h(
       'header',
