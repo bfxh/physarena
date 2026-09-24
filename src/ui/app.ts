@@ -356,7 +356,15 @@ export class App {
     if (!this.viewport) return;
     const ids = this.activeIds();
     const t0 = performance.now();
-    this.viewport.render(ids.map((id) => ({ id, label: id })));
+    this.viewport.render(
+      ids.map((id) => ({
+        id,
+        label: id,
+        // Only scenes with a fluid volume pay for this; the extractor is
+        // lazily built and the call returns null everywhere else.
+        fluidMesh: this.slot(id)?.sim?.fluidMesh() ?? null,
+      })),
+    );
     this.viewport.updateCamera();
     // Time to *issue* the frame - shader binding, uniform upload, command
     // submission. Not GPU execution time, which no browser exposes without the
@@ -1465,6 +1473,43 @@ export class App {
        * from the walls by looking at instance transforms. `spanY` is the honest
        * signal that the liquid is levelling out.
        */
+      /**
+       * Extracted fluid surface, if one was produced.
+       *
+       * Needed because a mesh that fails to appear looks identical to a feature
+       * that was never wired: the particles simply keep being drawn. An empty
+       * grid and a missing call are only distinguishable from here.
+       */
+      fluidSurface: () => {
+        for (const id of this.activeIds()) {
+          const sim = this.slot(id)?.sim;
+          const mesh = sim?.fluidMesh();
+          if (mesh) {
+            return {
+              vertices: mesh.positions.length / 3,
+              triangles: mesh.indices.length / 3,
+              grid: sim?.fluidSurfaceResolution() ?? null,
+            };
+          }
+        }
+        return null;
+      },
+      /** Diagnostics: what the built world actually contains. */
+      worldDiag: () => {
+        for (const id of this.activeIds()) {
+          const sim = this.slot(id)?.sim;
+          if (!sim) continue;
+          const w = sim.world;
+          return {
+            bodies: w?.bodies.length ?? 0,
+            fluidBodies: w?.bodies.filter((b) => b.fluid).length ?? 0,
+            fluidSpec: sim.fluidSpecSummary(),
+            solver: sim.hasFluid(),
+            scene: this.scenario.id,
+          };
+        }
+        return null;
+      },
       fluidStats: () => {
         // Scans every active pane rather than assuming the sandbox slot: in
         // split mode the fluid may live in any of them.

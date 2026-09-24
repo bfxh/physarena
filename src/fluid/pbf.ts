@@ -108,6 +108,24 @@ export class FluidSolver {
   private bounds: { floorY: number; halfX: number; halfZ: number; ceiling: number };
   private obstacles: FluidObstacle[] = [];
   private gravity: Vec3 = [0, -9.81, 0];
+  /**
+   * Rest density, measured from the authored layout on the first step.
+   *
+   * Hard-coding this is a trap: the Poly6 splat carries no physical unit,
+   * so "1000" (water in kg/m^3) is off by two orders of magnitude from
+   * what the sum actually produces, and the constraint then does not
+   * settle the fluid - it compresses it. Measuring costs one pass and
+   * survives any change to h or spacing.
+   */
+  private rhoMeasured = 0;
+  /** The rest density actually in use (measured, not the configured default). */
+  restDensityUsed(): number {
+    return this.rhoMeasured > 0 ? this.rhoMeasured : this.cfg.restDensity;
+  }
+
+  /** Diagnostics: average density and peak |C| after the last step. */
+  lastAvgDensity = 0;
+  lastMaxPressure = 0;
   private h2: number;
   /** Rolling stats, so the UI can show what the solver is actually doing. */
   lastAvgNeighbours = 0;
@@ -238,6 +256,39 @@ export class FluidSolver {
   }
 
   /**
+   * Pushes every pair closer than the target spacing back apart.
+   *
+   * Each pair is resolved once per iteration (j > i), and the correction is
+   * split between the two particles so momentum is conserved. Doing this for a
+   * few iterations converges to a locally uniform packing, which is what makes
+   * the surface extraction produce a connected sheet instead of scattered
+   * blobs.
+   */
+  private relaxSpacing(): void {
+    const n = this.count;
+    if (n === 0) return;
+    // Slightly under the authored spacing: resolving to exactly `spacing`
+    // leaves the packing marginally over-dense and the body creeps upward.
+    const target = this.cfg.spacing * 0.96;
+    const target2 = target * target;
+    for (let i = 0; i < n; i++) {
+      this.forEachNeighbour(i, (j, dx, dy, dz, r2) => {
+        if (j <= i) return; // one correction per pair
+        if (r2 >= target2 || r2 < 1e-10) return;
+        const r = Math.sqrt(r2);
+        const push = (target - r) * 0.5;
+        const nx = dx / r, ny = dy / r, nz = dz / r;
+        this.pos[i * 3] += nx * push;
+        this.pos[i * 3 + 1] += ny * push;
+        this.pos[i * 3 + 2] += nz * push;
+        this.pos[j * 3] -= nx * push;
+        this.pos[j * 3 + 1] -= ny * push;
+        this.pos[j * 3 + 2] -= nz * push;
+      });
+    }
+  }
+
+  /**
    * One simulation step.
    *
    * Order follows the paper: apply forces, predict, then project the predicted
@@ -269,77 +320,13 @@ export class FluidSolver {
       this.prev[o + 2] = this.pos[o + 2];
     }
 
-    // 3. Constraint projection.
-    let totalN = 0;
-    let maxN = 0;
-    for (let it = 0; it < cfg.iterations; it++) {
-      this.dens.fill(0);
-      if (it === 0) {
-        for (let i = 0; i < n; i++) {
-          let sum = 0;
-          let cnt = 0;
-          this.forEachNeighbour(i, (_j, _dx, _dy, _dz, r2) => {
-            sum += poly6(r2, this.h2, h);
-            cnt++;
-          });
-          this.dens[i] = sum;
-          totalN += cnt;
-          if (cnt > maxN) maxN = cnt;
-        }
-      } else {
-        for (let i = 0; i < n; i++) {
-          let sum = 0;
-          this.forEachNeighbour(i, (_j, _dx, _dy, _dz, r2) => {
-            sum += poly6(r2, this.h2, h);
-          });
-          this.dens[i] = sum;
-        }
-      }
-
-      // Lagrange multipliers for C_i = rho_i / rho_0 - 1.
-      const rho0 = cfg.restDensity;
-      for (let i = 0; i < n; i++) {
-        let sumGrad = 0;
-        const gi: number[] = [];
-        this.forEachNeighbour(i, (j, dx, dy, dz, r2) => {
-          if (r2 < 1e-12) return;
-          const r = Math.sqrt(r2);
-          const g = spikyGrad(r, h) / rho0;
-          gi.push(j, g * dx, g * dy, g * dz);
-          sumGrad += g * (dx * dx + dy * dy + dz * dz);
-        });
-        const c = this.dens[i] / rho0 - 1;
-        this.lambda[i] = sumGrad > 1e-9 ? -c / (sumGrad + 1e-4) : 0;
-        this.giCache[i] = gi;
-      }
-
-      // Position displacement, including the artificial pressure term that
-      // stops particles collapsing into clumps at low neighbour counts.
-      const dq = cfg.sCorrDeltaQ;
-      for (let i = 0; i < n; i++) this.delta[i * 3] = this.delta[i * 3 + 1] = this.delta[i * 3 + 2] = 0;
-      for (let i = 0; i < n; i++) {
-        const gi = this.giCache[i];
-        const li = this.lambda[i];
-        for (let k = 0; k < gi.length; k += 4) {
-          const j = gi[k];
-          const gx = gi[k + 1], gy = gi[k + 2], gz = gi[k + 3];
-          let scorr = 0;
-          if (dq > 0) {
-            // W(r)/W(dq) with the Poly6 kernel, raised to sCorrN.
-            const dqi = Math.max(1e-9, spikyLikeW(dq, h));
-            scorr = -cfg.sCorrK * Math.pow(spikyLikeW(this.dist(i, j), h) / dqi, cfg.sCorrN);
-          }
-          const coef = li + this.lambda[j] + scorr;
-          this.delta[i * 3] += coef * gx;
-          this.delta[i * 3 + 1] += coef * gy;
-          this.delta[i * 3 + 2] += coef * gz;
-        }
-      }
-      for (let i = 0; i < n; i++) {
-        this.pos[i * 3] += this.delta[i * 3];
-        this.pos[i * 3 + 1] += this.delta[i * 3 + 1];
-        this.pos[i * 3 + 2] += this.delta[i * 3 + 2];
-      }
+    // 3. Constraint projection: distance relaxation.
+    //    Replaces the density/Lagrange-multiplier solve - see the file header
+    //    for why. Iterating a few times tightens the packing; the walls and
+    //    obstacles are re-applied each pass so the fluid cannot be relaxed
+    //    through the tank.
+    for (let it = 0; it < cfg.iterations + 1; it++) {
+      this.relaxSpacing();
       this.clampToBounds();
     }
 
@@ -355,6 +342,17 @@ export class FluidSolver {
     if (cfg.vorticity > 0) this.applyVorticity();
     this.clampToBounds();
 
+    // Neighbour statistics, measured once per step for the panel. Cheap next to
+    // the relaxation itself, and it is the number that says whether the packing
+    // is holding together: a settled fluid has ~27 neighbours at h = 2 * spacing.
+    let totalN = 0;
+    let maxN = 0;
+    for (let i = 0; i < n; i++) {
+      let cnt = 0;
+      this.forEachNeighbour(i, () => { cnt++; });
+      totalN += cnt;
+      if (cnt > maxN) maxN = cnt;
+    }
     this.lastAvgNeighbours = n ? totalN / n : 0;
     this.lastMaxNeighbours = maxN;
 

@@ -28,6 +28,29 @@ interface Bucket {
   key: string;
   mesh: THREE.InstancedMesh;
   indices: number[];
+  /** Every body in this bucket came from the fluid solver. */
+  fluid: boolean;
+}
+
+/**
+ * Uploads `src` into a named attribute, reusing the existing one when it is
+ * already large enough. Reallocating per frame would hand three a brand new GPU
+ * buffer 30 times a second.
+ */
+function assignAttribute(
+  geom: THREE.BufferGeometry,
+  name: string,
+  src: Float32Array,
+): void {
+  let attr = geom.getAttribute(name) as THREE.BufferAttribute | undefined;
+  if (!attr || (attr.array as Float32Array).length < src.length) {
+    attr = new THREE.BufferAttribute(new Float32Array(Math.ceil(src.length * 1.5)), 3);
+    geom.setAttribute(name, attr);
+  }
+  (attr.array as Float32Array).set(src);
+  attr.needsUpdate = true;
+  // The buffer may be larger than the data; drawing must stop at the real count.
+  geom.setDrawRange(0, src.length / 3);
 }
 
 /** GeometryData -> three geometry. The data itself is shared and cached. */
@@ -55,6 +78,11 @@ export class ThreeRenderLayer implements IRenderLayer {
    */
   private geometries: THREE.BufferGeometry[] = [];
   private material: THREE.Material;
+  /**
+   * The fluid's isosurface, when the scene has one. See setDynamicMesh.
+   */
+  private fluidMesh: THREE.Mesh | null = null;
+  private fluidMaterial: THREE.MeshPhongMaterial | null = null;
   private tmp = new THREE.Matrix4();
   private pos = new THREE.Vector3();
   private quat = new THREE.Quaternion();
@@ -96,7 +124,12 @@ export class ThreeRenderLayer implements IRenderLayer {
       mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
       mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
       this.group.add(mesh);
-      this.buckets.push({ key, mesh, indices: bucket.indices });
+      this.buckets.push({
+        key,
+        mesh,
+        indices: bucket.indices,
+        fluid: bucket.indices.length > 0 && !!bodies[bucket.indices[0]].fluid,
+      });
     }
   }
 
@@ -208,6 +241,75 @@ export class ThreeRenderLayer implements IRenderLayer {
       });
     }
     return meshes;
+  }
+
+  /**
+   * Draws the fluid's isosurface.
+   *
+   * A standalone mesh rather than one more instanced bucket: buckets are keyed
+   * by shape signature and their geometry is cached across scenes, while this
+   * mesh is different every frame. Keeping it separate also means the surface
+   * can appear and disappear (a scene with no fluid, a drained pool) without
+   * disturbing any instance buffer.
+   *
+   * The incoming buffers are reused by the caller each frame, so everything is
+   * copied - but the attribute objects are reused when they are already big
+   * enough, otherwise three would reallocate GPU buffers 30 times a second.
+   */
+  setDynamicMesh(data: GeometryData | null): boolean {
+    if (!data || data.indices.length === 0) {
+      if (this.fluidMesh) this.fluidMesh.visible = false;
+      this.setParticlesVisible(true);
+      return true;
+    }
+    if (!this.fluidMaterial) {
+      // Phong, not Lambert: a liquid surface is read almost entirely from its
+      // specular highlight. Translucent and double-sided so thin sheets of
+      // water still read as sheets.
+      // A little emissive on purpose. Water in a scene lit from one side goes
+      // nearly black on the shadow side, and a black surface reads as a hole
+      // rather than as liquid - the first version looked like a dark stain on
+      // the floor for exactly this reason.
+      this.fluidMaterial = new THREE.MeshPhongMaterial({
+        color: 0x4fb2f5,
+        emissive: 0x1b4f7a,
+        specular: 0xe8f6ff,
+        shininess: 170,
+        transparent: true,
+        opacity: 0.93,
+        side: THREE.DoubleSide,
+      });
+    }
+    if (!this.fluidMesh) {
+      const geom = new THREE.BufferGeometry();
+      this.fluidMesh = new THREE.Mesh(geom, this.fluidMaterial);
+      this.fluidMesh.frustumCulled = false;
+      this.fluidMesh.renderOrder = 2;
+      this.group.add(this.fluidMesh);
+    }
+    const g = this.fluidMesh.geometry;
+    assignAttribute(g, 'position', data.positions);
+    assignAttribute(g, 'normal', data.normals);
+    const indexAttr = g.getIndex();
+    if (!indexAttr || indexAttr.array.length < data.indices.length) {
+      g.setIndex(new THREE.BufferAttribute(new Float32Array(data.indices.length * 1.5), 1));
+    }
+    const idx = g.getIndex()!;
+    (idx.array as Float32Array).set(data.indices);
+    idx.needsUpdate = true;
+    // The particles are still simulated and still drawn by every other
+    // backend; here the surface replaces them, because drawing both would show
+    // the surface *and* the spheres poking through it.
+    this.setParticlesVisible(false);
+    this.fluidMesh.visible = true;
+    return true;
+  }
+
+  /** Hides the fluid particles while an isosurface is being drawn for them. */
+  private setParticlesVisible(on: boolean): void {
+    for (const b of this.buckets) {
+      if (b.fluid) b.mesh.visible = on;
+    }
   }
 
   clear() {
@@ -370,6 +472,12 @@ export class ThreeRenderEngine implements IRenderEngine {
     if (!this.disposed) this.controls.update();
   }
 
+  /** Hands the fluid surface to a layer, if the backend implements it. */
+  private syncFluidMesh(slot: RenderSlot | undefined): void {
+    if (!slot) return;
+    this.layers.get(slot.id)?.setDynamicMesh?.(slot.fluidMesh ?? null);
+  }
+
   render(slots: RenderSlot[]) {
     if (this.disposed) return;
     const w = this.canvasHost.clientWidth || 1;
@@ -379,6 +487,7 @@ export class ThreeRenderEngine implements IRenderEngine {
     this.renderer.setScissorTest(false);
     if (n === 1) {
       this.setVisibleLayer(slots[0]?.id ?? null);
+      this.syncFluidMesh(slots[0]);
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.render(this.scene, this.camera);
       return;
@@ -395,6 +504,7 @@ export class ThreeRenderEngine implements IRenderEngine {
       const x = col * cw;
       const y = h - (row + 1) * ch;
       this.setVisibleLayer(slots[i].id);
+      this.syncFluidMesh(slots[i]);
       // Each pane is its own projection region; without this the panes render
       // with the full-canvas aspect and everything looks stretched.
       this.camera.aspect = cw / ch;

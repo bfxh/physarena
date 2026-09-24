@@ -1,4 +1,5 @@
 import type { BodyDesc, BodyState, Vec3 } from '../core/types';
+import type { GeometryData } from './geometry';
 
 /**
  * Renderer-agnostic interface, deliberately shaped like `IPhysicsEngine`.
@@ -58,11 +59,30 @@ export interface IRenderLayer {
   /** Index-aligned with `BodyDesc[]` from the last `setBodies`. */
   sync(states: BodyState[]): void;
   clear(): void;
+  /**
+   * Replaces the layer's fluid surface; `null` clears it.
+   *
+   * Optional on purpose. A backend that cannot rewrite a mesh's buffers in
+   * place simply does not implement this, and the fluid keeps being drawn as
+   * particles. Returning false counts as rejected, so the host can say so
+   * instead of quietly drawing something different from what it claims.
+   */
+  setDynamicMesh?(data: GeometryData | null): boolean;
 }
 
 export interface RenderSlot {
   id: string;
   label: string;
+  /**
+   * Isosurface of the scene's fluid, when it has one.
+   *
+   * The buffers belong to the caller and are **reused every frame** - a backend
+   * that keeps the data (an async upload, a retained copy) must copy it. A
+   * backend that cannot update a mesh in place ignores this field, and the
+   * fluid stays drawn as particles; that fallback is visible in the capability
+   * panel rather than silent.
+   */
+  fluidMesh?: GeometryData | null;
 }
 
 /**

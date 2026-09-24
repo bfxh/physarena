@@ -1,6 +1,8 @@
 import type { BodyDesc, BodyState, FluidSpec, IPhysicsEngine, Vec3, WorldDesc } from './types';
 import { RollingWindow, type TimingSummary } from './stats';
 import { FluidSolver, WATER, type FluidConfig, type FluidObstacle } from '../fluid/pbf';
+import { SurfaceExtractor } from '../fluid/surface';
+import type { GeometryData } from '../render/geometry';
 import type { Scenario } from '../scenarios/types';
 
 export interface SimulationOptions {
@@ -49,6 +51,10 @@ export class Simulation {
   private fluid: FluidSolver | null = null;
   /** Rigid bodies handed to the engine; fluid particles follow them in states. */
   rigidCount = 0;
+  /** Isosurface extractor for the fluid, built on first use. */
+  private surface: SurfaceExtractor | null = null;
+  private surfaceData: GeometryData | null = null;
+  private surfaceTick = 0;
 
   constructor(opts: SimulationOptions) {
     this.opts = opts;
@@ -222,6 +228,71 @@ export class Simulation {
   }
 
   /**
+   * The fluid's isosurface, or null when the scene has no fluid.
+   *
+   * Rebuilt every *other* call. Extraction is a splat over a grid followed by a
+   * full cell sweep, and at 60 Hz the extra smoothness is not visible next to
+   * its cost - 30 Hz reads as liquid and leaves the frame budget to physics.
+   *
+   * Callers get the same underlying buffers back each frame (the extractor
+   * reuses its allocations), so anything that retains the mesh across frames
+   * must copy it. The renderer contract says exactly this.
+   */
+  fluidMesh(): GeometryData | null {
+    if (!this.fluid || !this.world?.fluid) return null;
+    const spec = this.world.fluid;
+    const spacing = spec.spacing ?? 0.3;
+    if (!this.surface) {
+      // 0.6 * spacing instead of 1.05: the grid went from 17 cells across
+      // the tank to 29, which is the difference between visible facets and
+      // a smooth surface. Cost is cubic in the cell size, so this is the
+      // number to reason about rather than turn up blindly.
+      const cell = Math.max(0.12, spacing * 0.6);
+      this.surface = new SurfaceExtractor();
+      this.surface.configure(
+        [-spec.halfX, 0, -spec.halfZ],
+        [spec.halfX, spec.ceiling, spec.halfZ],
+        cell,
+      );
+    }
+    if (this.surfaceTick++ % 2 === 0) {
+      // Influence radius comfortably larger than the particle spacing: the
+      // level set has to join neighbouring particles into one body of water
+      // rather than wrapping each of them in its own blob.
+      const radius = spacing * 1.9;
+      // The splat writes 1/R^3 at a particle's own centre, so the isolevel must
+      // be expressed relative to that peak. A fixed absolute value is the trap
+      // here: with R ~ 1.1 m the peak is only ~0.68, so a threshold of 1.35 can
+      // never be crossed by anything - the grid comes out empty, the surface
+      // never appears, and the particles keep being drawn as spheres, which
+      // looks exactly like "the feature is not wired up".
+      // 0.6 of a single particle's peak puts the surface just inside the
+      // influence radius; overlapping neighbours push it outward, which is what
+      // makes the pool read as one body of water.
+      const peak = 1 / (radius * radius * radius);
+      this.surfaceData = this.surface.extract(this.fluid.pos, this.fluid.count, radius, peak * 0.6);
+    }
+    return this.surfaceData;
+  }
+
+  /** Diagnostics: whether a fluid solver exists for the current world. */
+  hasFluid(): boolean {
+    return !!this.fluid;
+  }
+
+  /** Diagnostics: the raw fluid spec the scene produced, if any. */
+  fluidSpecSummary(): string | null {
+    const f = this.world?.fluid;
+    if (!f) return null;
+    return 'halfX=' + f.halfX + ' halfZ=' + f.halfZ + ' ceil=' + f.ceiling + ' spacing=' + f.spacing;
+  }
+
+  /** Grid resolution the extractor settled on, for the metrics panel. */
+  fluidSurfaceResolution(): [number, number, number] | null {
+    return this.surface ? this.surface.resolution : null;
+  }
+
+  /**
    * Fluid statistics for the metrics panel, or null when the scene has none.
    *
    * `spanY` is the number that distinguishes a real fluid from a sphere pile:
@@ -241,6 +312,10 @@ export class Simulation {
     const f = this.fluid;
     return {
       particles: f.count,
+      // No rho0 / avgDensity / maxPressure: those described the density
+      // projection, and the solver now enforces spacing directly. Reporting a
+      // quantity that is no longer computed would be worse than reporting
+      // nothing.
       avgNeighbours: f.lastAvgNeighbours,
       maxNeighbours: f.lastMaxNeighbours,
       iterations: f.cfg.iterations,

@@ -105,6 +105,13 @@ export class SceneBuilder {
       velocity: opts.velocity,
       angularVelocity: opts.angularVelocity,
       mass: opts.mass,
+      // Easy to forget, and silent when forgotten: drop this and the particles
+      // become ordinary rigid bodies - the fluid solver is never built, the
+      // surface extraction has nothing to extract, and the scene sits perfectly
+      // still while looking like "the fluid feature was never implemented".
+      // A whitelist constructor means every new BodyDesc field has to be added
+      // in exactly one place, and this is it.
+      fluid: opts.fluid,
     };
     this.bodies.push(b);
     this.trackContent(b);
