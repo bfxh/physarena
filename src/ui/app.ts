@@ -121,6 +121,8 @@ export class App {
     /** Persistent container so the metric panel updates without a rebuild. */
     metrics: HTMLElement;
     stage: HTMLElement;
+    /** Column holding the scenario bar, the stage and the compare table. */
+    stageWrap: HTMLElement;
     benchPane: HTMLElement;
     hud: HTMLElement;
     overlay: HTMLElement;
@@ -266,6 +268,13 @@ export class App {
     );
 
     // stage internals
+    // The scenario picker belongs to the centre column, not to a side panel: it
+    // is the one choice that applies to every mode and to both axes. Built
+    // before the element table so `els.stageWrap` is a real node rather than an
+    // unassigned forward reference - the previous ordering left it undefined at
+    // the moment it was read.
+    const stageWrap = h('div', { class: 'pa-stage-wrap' }, scenarioBar, stage);
+
     this.els = {
       engineList: engines,
       engineRail: h('div', { class: 'pa-rail' }),
@@ -281,6 +290,7 @@ export class App {
       overlay: h('div', { class: 'pa-stage-msg', style: 'display:none' }),
       controls,
       headerCounts,
+      stageWrap,
     };
 
     const sidebarLeft = h('aside', { class: 'pa-panel pa-panel-left' });
@@ -289,10 +299,6 @@ export class App {
       engines,
       this.els.engineRail,
     );
-
-    // The scenario picker belongs to the centre column, not to a side panel: it
-    // is the one choice that applies to every mode and to both axes.
-    const stageWrap = h('div', { class: 'pa-stage-wrap' }, this.els.scenarioList, stage);
 
     stage.append(this.els.hud, this.els.overlay);
     benchPane.append(h('aside', { class: 'pa-panel' }, h('div', { class: 'pa-panel-title', text: '跑分设置' }), h('div', { id: 'pa-bench-cfg' })), h('div', { class: 'pa-bench-main', id: 'pa-bench-main' }));
@@ -355,8 +361,15 @@ export class App {
           ? '收起物理引擎栏（缩成图标）'
           : '收起渲染引擎栏（缩成图标）';
     }
-    // The stage changed width; overlays are positioned in pixels.
-    this.layoutOverlay();
+    // The CSS grid change has not been laid out yet, so the stage still reports
+    // its old width here and the renderer would be resized to the wrong size.
+    // One frame later the browser has applied the class and the measurement is
+    // real. This is why collapsing used to leave the view stretched: the canvas
+    // kept the old dimensions while the container grew.
+    requestAnimationFrame(() => {
+      this.viewport?.resize();
+      this.layoutOverlay();
+    });
     if (this.mode === 'bench') this.renderBenchPane();
   }
 
@@ -834,7 +847,7 @@ export class App {
       this.viewport?.resize();
       const stage = this.els?.stage;
       if (!stage) return;
-      for (const el of [...stage.querySelectorAll('.pa-slot-label, .pa-slot-compare')]) el.remove();
+      for (const el of [...this.els.stageWrap.querySelectorAll('.pa-slot-label, .pa-slot-compare, .pa-pane-divider')]) el.remove();
       if (this.mode !== 'compare') return;
       const ids = this.compareIds;
       const rects = slotRects(ids.length, stage.clientWidth, stage.clientHeight);
@@ -857,8 +870,26 @@ export class App {
         );
         this.els.stage.append(label);
       });
+      // A divider per internal edge, so two adjacent viewports do not read as
+      // one wide picture.
+      if (ids.length > 1) {
+        const seen = new Set<string>();
+        for (const r of rects) {
+          const right = Math.round(r.x + r.w);
+          if (right < stage.clientWidth - 2 && !seen.has(`v${right}`)) {
+            seen.add(`v${right}`);
+            stage.append(h('div', {
+              class: 'pa-pane-divider',
+              style: `left:${right}px; top:0; width:1px; height:100%`,
+            }));
+          }
+        }
+      }
       // The numbers that make it a comparison rather than two pictures.
-      if (ids.length > 1) this.els.stage.append(this.comparePanel());
+      // Appended to the column, not the stage: as an overlay it covered the
+      // bottom half of every pane, which is exactly what "多开一个引擎就被
+      // 信息挡住" describes.
+      if (ids.length > 1) this.els.stageWrap.append(this.comparePanel());
     } finally {
       this.layoutBusy = false;
     }

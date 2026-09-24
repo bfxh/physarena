@@ -440,3 +440,27 @@ table.pa-table td.slow { color: var(--danger); }
 /* The collapse handle is positioned against the panel edge, so the panel has to
    establish a containing block. */
 .pa-panel { position: relative; }
+
+/* The compare table is part of the column layout, not an overlay: as an
+   absolutely-positioned panel it covered the bottom half of both panes. Now the
+   viewport gives up the height instead. */
+.pa-stage-wrap .pa-slot-compare {
+  position: static;
+  flex: none;
+  max-height: 34vh;
+  overflow: auto;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+
+/* Keeps two adjacent viewports from reading as one wide picture. */
+.pa-pane-divider {
+  position: absolute;
+  background: var(--line-strong);
+  pointer-events: none;
+  z-index: 2;
+}
