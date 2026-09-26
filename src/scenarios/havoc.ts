@@ -627,4 +627,58 @@ export const HAVOC_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'destruct-fracture',
+    name: '预制破碎',
+    group: '破坏与流体',
+    description:
+      '一面墙被预先切成一百多块带随机朝向的碎块，块与块之间只留发丝级的缝，高速球撞上去整体崩碎。与「炮弹轰墙」的整砖墙不同：**这里每块从一开始就是独立刚体**，初始就带着大量近零间距的接触——考验的是求解器对「一开始就挤在一起」的处理，以及碎块飞散后会不会互相穿透。',
+    defaultBodies: 150,
+    maxBodies: 700,
+    scalable: true,
+    build(ctx) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(180, 1, 0, { friction: 0.8 });
+
+      const rnd = rng(ctx.seed || 61);
+      const max = Math.max(30, ctx.bodies);
+      const cols = 9;
+      const rows = Math.min(14, Math.ceil(max / cols));
+      const bw = 0.52;
+      const bh = 0.44;
+      let n = 0;
+      for (let iy = 0; iy < rows; iy++) {
+        for (let ix = 0; ix < cols; ix++) {
+          if (n >= max) break;
+          // Slight random rotation: perfect boxes stack nicely, real debris does
+          // not. The jitter is what makes the collapse look like a fracture
+          // instead of a card trick.
+          const half = rnd() * Math.PI;
+          b.box(
+            [(ix - (cols - 1) / 2) * bw * 1.01, 0.25 + iy * bh * 1.02, (rnd() - 0.5) * 0.04],
+            [bw * 0.47, bh * 0.47, 0.2],
+            {
+              rotation: [0, Math.sin(half / 2), 0, Math.cos(half / 2)],
+              friction: 0.65,
+              restitution: 0.02,
+              density: 1600,
+            },
+          );
+          n++;
+        }
+      }
+      // One heavy shot at the lower third - hitting near the base topples the
+      // whole wall, hitting mid-wall punches a hole. Both are interesting.
+      b.sphere([-12, 2.2, 0], 0.5, {
+        density: 9000,
+        velocity: [42, 0, 0],
+        ccd: true,
+        tag: 'projectile',
+      });
+      b.extent = 20;
+      return b;
+    },
+  },
 ];

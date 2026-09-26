@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-24T13:14:40.383Z",
+  "at": "2026-09-24T14:07:18.228Z",
   "base": "http://localhost:4173",
   "list": [
     {
@@ -59,11 +59,11 @@
       "cur": "three",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 124,
-        "scene": 36139,
-        "size": "838x690"
+        "distinct": 120,
+        "scene": 36572,
+        "size": "830x705"
       },
-      "stepP50": "0.050",
+      "stepP50": "0.080",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -74,11 +74,11 @@
       "cur": "babylon",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 102,
-        "scene": 36139,
-        "size": "838x690"
+        "distinct": 100,
+        "scene": 36572,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.050",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -89,11 +89,11 @@
       "cur": "webgl2",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 143,
-        "scene": 36139,
-        "size": "838x690"
+        "distinct": 139,
+        "scene": 36572,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.050",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -104,11 +104,11 @@
       "cur": "webgl1",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 143,
-        "scene": 36139,
-        "size": "838x690"
+        "distinct": 139,
+        "scene": 36572,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.050",
       "triangles": "492",
       "instances": "41",
       "guards": 0,
@@ -119,11 +119,11 @@
       "cur": "points",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 23,
-        "scene": 1319,
-        "size": "838x690"
+        "distinct": 22,
+        "scene": 1356,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.055",
       "triangles": "0",
       "instances": "41",
       "guards": 0,
@@ -134,11 +134,11 @@
       "cur": "wireframe",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 183,
-        "scene": 5014,
-        "size": "838x690"
+        "distinct": 168,
+        "scene": 5104,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.055",
       "triangles": "0",
       "instances": "41",
       "guards": 0,
@@ -149,11 +149,11 @@
       "cur": "canvas2d",
       "sample": {
         "tag": "CANVAS",
-        "distinct": 267,
-        "scene": 36139,
-        "size": "838x690"
+        "distinct": 274,
+        "scene": 36572,
+        "size": "830x705"
       },
-      "stepP50": "0.045",
+      "stepP50": "0.050",
       "triangles": "240",
       "instances": "40",
       "guards": 0,
@@ -168,7 +168,7 @@
         "distinct": 4,
         "scene": 123
       },
-      "stepP50": "0.045",
+      "stepP50": "0.040",
       "triangles": "120",
       "instances": "40",
       "guards": 0,
@@ -183,7 +183,7 @@
         "distinct": 4,
         "scene": 42
       },
-      "stepP50": "0.043",
+      "stepP50": "0.040",
       "triangles": "0",
       "instances": "41",
       "guards": 0,

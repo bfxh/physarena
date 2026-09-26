@@ -133,4 +133,48 @@ export const PBF_SCENARIOS: Scenario[] = [
       return b;
     },
   },
+
+  {
+    id: 'pbf-jet',
+    name: '真流体 · 对喷',
+    group: '破坏与流体',
+    description:
+      '两股水柱相向对撞。**初始动能全部要被密度约束吸收**：撞点附近密度瞬间超标，约束把水往四面八方推开，形成一片不稳定的溅射冠。这是涡量约束最出效果的场景——关掉它，对撞会变成两根互相穿过绳子。',
+    defaultBodies: 700,
+    maxBodies: 2400,
+    scalable: true,
+    build(ctx: BuildContext) {
+      const b = new SceneBuilder();
+      b.gravity = ctx.gravity;
+      b.ground(180, 1, 0, { friction: 0.85 });
+
+      // A shallow catch basin so the aftermath collects instead of sliding away.
+      const half = 6;
+      const [ix, iz, floor] = tank(b, half, 2.2);
+
+      // Two opposed columns with inward velocity. The columns are authored as
+      // ordinary particle volumes; the speed comes from the initial velocity,
+      // exactly like the emitter demos but without needing a live emitter.
+      const speed = 9;
+      b.fluidVolume(
+        [-ix + 0.5, floor + 0.4, -1.5],
+        [-ix + 2.5, floor + 4.6, 1.5],
+        { spacing: 0.62, h: 1.24, iterations: 2, vorticity: 0.1, viscosity: 0.01, renderScale: 2.6 },
+      );
+      // Give the left column its rightward push.
+      for (const p of b.bodies) {
+        if (p.fluid && p.position[0] < -1 && !p.velocity) p.velocity = [speed, 0, 0];
+      }
+      b.fluidVolume(
+        [ix - 2.5, floor + 0.4, -1.5],
+        [ix - 0.5, floor + 4.6, 1.5],
+        { spacing: 0.62, h: 1.24, iterations: 2, vorticity: 0.1, viscosity: 0.01, renderScale: 2.6 },
+      );
+      for (const p of b.bodies) {
+        if (p.fluid && p.position[0] > 1 && !p.velocity) p.velocity = [-speed, 0, 0];
+      }
+      b.extent = 24;
+      return b;
+    },
+  },
 ];
