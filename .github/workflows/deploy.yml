@@ -1,0 +1,53 @@
+# Deploys PhysArena to GitHub Pages on every push to main.
+#
+# The site is the deliverable: opening the published URL must give a working
+# lab with no local build step. Everything the engines need (the .wasm payloads
+# and their emscripten glue) is part of `npm run build` output, so one
+# `vite build` is the whole story.
+#
+# Known limitation, stated rather than hidden: GitHub Pages cannot send custom
+# response headers, so the COOP/COEP headers the dev server sets are absent.
+# All nine engines currently shipped are single-threaded wasm builds and do not
+# need them; a multithreaded engine build would need a COOP/COEP service-worker
+# shim before it works from Pages.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -12,6 +12,9 @@ const RAW_WASM_PKGS = [
 ];
 
 export default defineConfig({
+  // Relative base so the built site works from any sub-path. GitHub Pages
+  // serves user sites from /<repo>/, and absolute /assets/... URLs break there.
+  base: './',
   server: {
     port: 5180,
     strictPort: false,
