@@ -12,9 +12,13 @@ const RAW_WASM_PKGS = [
 ];
 
 export default defineConfig({
-  // Relative base so the built site works from any sub-path. GitHub Pages
-  // serves user sites from /<repo>/, and absolute /assets/... URLs break there.
-  base: './',
+  // The Pages deployment lives at /physarena/. A relative base ('./') broke the
+  // engines: the emscripten glue resolves its .wasm against the *page* URL, not
+  // the chunk URL, so /physarena/ + './assets/x.wasm' pointed somewhere that did
+  // not exist - locally (served at /) the same lookup worked, which is why it
+  // only failed after deploy. The absolute sub-path keeps every lookup correct;
+  // if the repo is ever renamed or moves to a custom domain, change this line.
+  base: '/physarena/',
   server: {
     port: 5180,
     strictPort: false,

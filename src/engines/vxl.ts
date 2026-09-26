@@ -108,7 +108,7 @@ class VxlEngine extends PhysicsEngineBase {
   private dynamic: boolean[] = [];
 
   async init(): Promise<void> {
-    const url = '/vendor/vxl/vxl_phys_wasm.wasm';
+    const url = `${import.meta.env.BASE_URL}vendor/vxl/vxl_phys_wasm.wasm`;
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(

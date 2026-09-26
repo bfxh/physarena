@@ -35,7 +35,7 @@ function loadAmmoScript(): Promise<any> {
     const w = window as any;
     if (w.Ammo) return resolve(w.Ammo);
     const el = document.createElement('script');
-    el.src = '/vendor/ammo/ammo.js';
+    el.src = `${import.meta.env.BASE_URL}vendor/ammo/ammo.js`;
     el.async = true;
     el.onload = () => (w.Ammo ? resolve(w.Ammo) : reject(new Error('ammo.js 未导出 Ammo')));
     el.onerror = () => reject(new Error('无法加载 /vendor/ammo/ammo.js'));

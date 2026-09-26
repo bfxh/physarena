@@ -36,7 +36,9 @@ class HavokEngine extends PhysicsEngineBase {
   async init(): Promise<void> {
     const mod: any = await import('@babylonjs/havok');
     const HavokPhysics = mod.default ?? mod;
-    this.hk = await HavokPhysics({ locateFile: () => '/vendor/havok/HavokPhysics.wasm' });
+    this.hk = await HavokPhysics({
+      locateFile: () => `${import.meta.env.BASE_URL}vendor/havok/HavokPhysics.wasm`,
+    });
   }
 
   // ---- motion types -------------------------------------------------------

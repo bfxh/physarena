@@ -75,7 +75,12 @@ class PhysX5Engine extends PhysicsEngineBase {
     const PhysXInit = mod.default ?? mod;
     // The published build is browser-only; the wasm is served from /vendor so
     // the URL is identical in dev and in the production bundle.
-    this.P = await PhysXInit({ locateFile: () => '/vendor/physx/physx-js-webidl.wasm' });
+    // BASE_URL, not an absolute path: under the Pages sub-path an absolute
+    // /vendor/... hits the domain root and 404s, which read as "wasm fetch
+    // failed". Vite injects the base ("/" locally, "/physarena/" on Pages).
+    this.P = await PhysXInit({
+      locateFile: () => `${import.meta.env.BASE_URL}vendor/physx/physx-js-webidl.wasm`,
+    });
     // This WebIDL build flattens PxTopLevelFunctions' statics onto the
     // module object itself; the namespaced layout only exists in some
     // builds, so both are supported.
