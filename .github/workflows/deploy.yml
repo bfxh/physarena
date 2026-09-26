@@ -37,7 +37,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # enablement: true lets the action flip the repo's Pages source to
+      # "GitHub Actions" on first deploy - without it, a fresh repository fails
+      # here with "Get Pages site failed" because no Pages site exists yet.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
