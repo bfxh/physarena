@@ -48,7 +48,7 @@ app.start().then(() => clearTimeout(watchdog)).catch((e) => {
   const box = document.createElement('div');
   box.className = 'pa-empty';
   box.style.paddingTop = '15vh';
-  box.innerHTML = `<div style="font-size:15px;font-weight:600;color:#cf3b3b">PhysArena 启动失败</div>
+  box.innerHTML = `<div style="font-size:15px;font-weight:600;color:#cf3b3b">BSHSQ 启动失败</div>
     <div style="margin-top:8px;font-family:ui-monospace,monospace;font-size:12px">${
       String(e?.message ?? e).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!))
     }</div>

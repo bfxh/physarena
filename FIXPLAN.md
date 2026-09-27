@@ -1,6 +1,6 @@
-# PhysArena 修复台账（2026-09-15 完成）
+# BSHSQ 修复台账（2026-09-15 完成）
 
-入口：`C:\Users\lbx13\WorkBuddy\2026-09-15-07-43-53\physarena` → 拷贝到 `D:\开发\physarena`。
+入口：`C:\Users\lbx13\WorkBuddy\2026-09-15-07-43-53\bshsq` → 拷贝到 `D:\开发\bshsq`。
 三路静态审视（引擎适配器 31 项 / 场景库 44 项 / UI+自检 24 项）全部逐条处置；
 动态验证：自检矩阵 19 探针 × 9 引擎 **0 失败**，跑分 9 引擎 × 8 场景全部完成。
 
@@ -12,7 +12,7 @@
 | 2 | 自检空探针（3 个）+ 跑分睡眠感知 + 活跃度口径 | ✅ 完成 |
 | 3 | 场景几何 20+ 处（互穿/入土/名实不符/关节违例） | ✅ 完成 |
 | 4 | UI/渲染/导入（暂停黑屏/进度/互斥/重试/取景/NaN/注入/排序） | ✅ 完成 |
-| 5 | 新增第 9 引擎 vxl-phys（wasm 桥，零 unsafe）+ 跑分对比 | ✅ 完成 |
+| 5 | 新增第 9 引擎 BSHSQ-Solver（wasm 桥，零 unsafe）+ 跑分对比 | ✅ 完成 |
 
 ## 关键实测证据
 
@@ -26,13 +26,13 @@
 - **跑分（后）**：`out/bench-after.json` —— 9 引擎 × 8 场景；睡眠感知窗口生效
   （每个静止场景给出 `sleep_onset_step`）。8 场景平均 p50（ms）：
   PhysX 0.29 / Havok 0.35 / Oimo 0.56 / Jolt 0.63 / Rapier 0.72 / Crashcat 1.09 /
-  Bullet 2.06 / **vxl-phys 2.71** / cannon-es 47.5（含一格 30 s 超限）。
+  Bullet 2.06 / **BSHSQ-Solver 2.71** / cannon-es 47.5（含一格 30 s 超限）。
 - **构建与类型**：`npm run typecheck` 0 报错；`npm run build` 通过；
   `npm run build:vxl` 产出 354 KB 桥 wasm（桥自带 3 项单测 + 零 unsafe 源码自检）。
 
 ## 新增资产
 
-- `src/engines/vxl.ts` + registry 第 9 项：vxl-phys（RUST WL）adapter。
+- `src/engines/vxl.ts` + registry 第 9 项：BSHSQ-Solveradapter。
 - `wasm-bridge/`：独立工作区的桥 crate（batch ABI，零 unsafe；`vxl_abi` 版本化）。
 - `scripts/build-vxl-wasm.mjs`、`scripts/arena-drive.mjs`（无头驱动：selftest/bench）、
   `scripts/arena-probe-only.mjs`、`scripts/arena-probe.mjs`、若干隔离探针
@@ -43,7 +43,7 @@
 
 - **cannon-es 布娃娃群 356 ms/步**（触及 30 s 单格上限、样本不完整）：凸包胶囊
   × 12 次迭代的病态窄相，属该引擎自身特性；跑分表已标注。
-- **vxl-phys 关节未接桥**：facade 尚无关节 API（mech 域在引擎路线图里），
+- **BSHSQ-Solver 关节未接桥**：facade 尚无关节 API（mech 域在引擎路线图里），
   声明为不支持并在每个关节场景标注。
 - **PhysX CCD**：上游绑定/集成层面的实测结论已写入其 README「已知限制」；
   若后续版本修复，把 `capabilities.ccd` 改回 `true` 即可（标志代码已就位）。
@@ -53,7 +53,7 @@
 ## 复现命令
 
 ```bash
-cd /d/开发/physarena
+cd /d/开发/bshsq
 npm run typecheck && npm run build          # 静态与构建
 npm run build:vxl                            # 需要 Rust + wasm32 目标
 npm run preview &                            # 4173

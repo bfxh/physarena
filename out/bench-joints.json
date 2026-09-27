@@ -1,7 +1,7 @@
 [
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "pyramid",
@@ -28,8 +28,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "brick-wall",
@@ -56,8 +56,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "ball-pit",
@@ -84,8 +84,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "chain-hinge",
@@ -112,8 +112,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "ragdoll",
@@ -135,7 +135,7 @@
     "warmupSteps": 30,
     "notes": [
       "capsule→凸包",
-      "vxl-phys: 关节限位未实现（limits 被忽略）"
+      "BSHSQ-Solver: 关节限位未实现（limits 被忽略）"
     ],
     "stateHash": "9c879688",
     "awakeFraction": 1,
@@ -143,8 +143,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "spring-net",
@@ -171,8 +171,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "ccd-onslaught",
@@ -199,8 +199,8 @@
     "completed": true
   },
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "scenarioId": "trimesh-terrain",

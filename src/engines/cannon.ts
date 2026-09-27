@@ -236,7 +236,7 @@ class CannonEngine extends PhysicsEngineBase {
   }
 
   protected stepWorld(dt: number): void {
-    // Single explicit step: PhysArena owns the accumulator, not the engine.
+    // Single explicit step: BSHSQ owns the accumulator, not the engine.
     this.world.step(dt);
   }
 

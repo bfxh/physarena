@@ -84,7 +84,7 @@ export async function loadRenderers(): Promise<RendererEntry[]> {
     });
   });
   if (failed.length) {
-    console.warn('[physarena] 渲染器模块加载失败（已跳过）:\n' + failed.join('\n'));
+    console.warn('[bshsq] 渲染器模块加载失败（已跳过）:\n' + failed.join('\n'));
   }
   if (!entries.length) throw new Error('没有可用的渲染引擎：' + failed.join('; '));
   cached = entries;

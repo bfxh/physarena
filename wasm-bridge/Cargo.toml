@@ -3,9 +3,9 @@ name = "vxl-phys-wasm"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "vxl-phys ↔ PhysArena wasm 桥：批量 ABI（独立于引擎工作区；引擎侧保持零 unsafe）"
+description = "BSHSQ-Solver ↔ BSHSQ wasm 桥：批量 ABI（独立于引擎工作区；引擎侧保持零 unsafe）"
 
-# 独立工作区：本 crate 是物理引擎与 PhysArena 之间的**工具桥**，不并入引擎工作区
+# 独立工作区：本 crate 是物理引擎与 BSHSQ 之间的**工具桥**，不并入引擎工作区
 # （引擎 crates 维持 `#![forbid(unsafe_code)]` 与零外部依赖纪律；本桥零 unsafe 且
 #  仅依赖引擎 path crate）。
 [workspace]
@@ -14,9 +14,9 @@ description = "vxl-phys ↔ PhysArena wasm 桥：批量 ABI（独立于引擎工
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-vxl-phys = { path = "../../RUST WL/crates/vxl-phys" }
-vxl-phys-core = { path = "../../RUST WL/crates/vxl-phys-core" }
-vxl-phys-terrain = { path = "../../RUST WL/crates/vxl-phys-terrain" }
+BSHSQ-Solver = { path = "../..//crates/BSHSQ-Solver" }
+vxl-phys-core = { path = "../..//crates/vxl-phys-core" }
+vxl-phys-terrain = { path = "../..//crates/vxl-phys-terrain" }
 
 [profile.release]
 opt-level = 3

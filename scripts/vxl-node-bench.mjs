@@ -1,5 +1,5 @@
-// 离线 wasm 基准：在 Node 里直接跑 vxl-phys 桥（不经浏览器、不进 arena 前端）。
-// 场景与 PhysArena 完全同参（金字塔 210 / 砖墙 200 / 球坑 400）。
+// 离线 wasm 基准：在 Node 里直接跑 BSHSQ-Solver 桥（不经浏览器、不进 arena 前端）。
+// 场景与 BSHSQ 完全同参（金字塔 210 / 砖墙 200 / 球坑 400）。
 // 用法：node scripts/vxl-node-bench.mjs [wasm 路径]
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -128,7 +128,7 @@ function step() {
 
 function sceneTrimesh() {
   ex.vxl_world_create(0, -9.81, 0, 0, 240);
-  // 90 m × 24 段高度场（与 PhysArena 同参）
+  // 90 m × 24 段高度场（与 BSHSQ 同参）
   const size = 90, seg = 24, step = size / seg;
   const h = (x, z) => Math.sin(x * 0.13) * 1.6 + Math.cos(z * 0.11) * 1.4 + Math.sin((x + z) * 0.05) * 1.1;
   ex.vxl_mesh_begin();

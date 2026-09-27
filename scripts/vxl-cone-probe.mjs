@@ -1,18 +1,18 @@
-// vxl-phys 圆锥落体直测：读回位姿后把 hull 顶点转到世界系，量最低点相对地面的高度
+// BSHSQ-Solver 圆锥落体直测：读回位姿后把 hull 顶点转到世界系，量最低点相对地面的高度
 // （判定「深穿透 = 引擎接触缺陷」还是「侧躺 = 合法姿态」）。
 import { chromium } from 'playwright-core';
 
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage();
 await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
-await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
+await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
 
 const out = await page.evaluate(async () => {
   const res = await fetch('/vendor/vxl/vxl_phys_wasm.wasm');
   const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), {});
   const ex = instance.exports;
 
-  // 与 PhysArena 的 cone→凸包 降级链一致：coneHullPoints(0.4, 0.5)。
+  // 与 BSHSQ 的 cone→凸包 降级链一致：coneHullPoints(0.4, 0.5)。
   const pts = [0, 0.5, 0];
   const seg = 16;
   for (let i = 0; i < seg; i++) {

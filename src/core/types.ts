@@ -1,7 +1,7 @@
 /**
  * Engine-agnostic scene description.
  *
- * Every physics engine in PhysArena is driven through this intermediate
+ * Every physics engine in BSHSQ is driven through this intermediate
  * representation. Nothing here may leak a native handle, a matrices/vector
  * type, or an engine-specific option - the whole point of the lab is that the
  * exact same `WorldDesc` is replayed by 8 different solvers.

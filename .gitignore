@@ -16,3 +16,4 @@ _shot.mjs
 _testmode.mjs
 _collapse.mjs
 _testview.mjs
+_patch_*.py

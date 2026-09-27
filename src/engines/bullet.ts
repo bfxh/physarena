@@ -234,7 +234,7 @@ class BulletEngine extends PhysicsEngineBase {
             if (j.motor) {
               try {
                 // Bullet's third argument is an impulse cap, the IR's is a
-                // force/torque cap. PhysArena runs a fixed 1/60 step, so the
+                // force/torque cap. BSHSQ runs a fixed 1/60 step, so the
                 // conversion is force * dt; the note makes it inspectable.
                 const DT = 1 / 60;
                 con.enableAngularMotor(true, j.motor.targetVelocity, j.motor.maxForce * DT);
@@ -278,7 +278,7 @@ class BulletEngine extends PhysicsEngineBase {
   }
 
   protected stepWorld(dt: number): void {
-    // (dt, maxSubSteps, fixedTimeStep) with maxSubSteps = 1 keeps PhysArena in
+    // (dt, maxSubSteps, fixedTimeStep) with maxSubSteps = 1 keeps BSHSQ in
     // charge of the accumulator, so every engine gets exactly one step here.
     this.world.stepSimulation(dt, 1, dt);
   }

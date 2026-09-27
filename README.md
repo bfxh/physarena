@@ -1,13 +1,13 @@
-# PhysArena · 浏览器物理引擎测试场
+# BSHSQ · 浏览器物理引擎测试场
 
 这是一个**双轴**测试场，两条轴互相独立、可自由搭配：
 
-- **物理轴**：9 个求解器——自研的 **vxl-phys（RUST WL）**、Rust 的 Rapier、C++ 的 Jolt / PhysX 5 / Bullet / Havok、纯 JS 的 Crashcat / cannon-es / Oimo.js。
+- **物理轴**：9 个求解器——自研的 **BSHSQ-Solver**、Rust 的 Rapier、C++ 的 Jolt / PhysX 5 / Bullet / Havok、纯 JS 的 Crashcat / cannon-es / Oimo.js。
 - **渲染轴**：4 个后端——**three.js**、**Babylon.js**、**手写原生 WebGL2**、**Canvas2D 软件光栅**（完全不用 GPU）。
 
 任意渲染器都能驱动任意物理引擎，两侧互不知情。同一份 `WorldDesc` 喂给全部 9 个求解器，跑分时每个引擎接收**完全相同的固定 dt 序列**——否则计时和轨迹都不可比。所有渲染后端画的是**同一批三角形**，四个后端的相机位置实测逐位一致，所以画面差异只可能来自管线本身。
 
-> **vxl-phys（RUST WL，自研）已在台上**（第 9 个引擎）：全 f32、零外部依赖、固定输入
+> **BSHSQ-Solver（自研）已在台上**（第 9 个引擎）：全 f32、零外部依赖、固定输入
 > 逐位可复现，经 `wasm-bridge/`（零 unsafe）接入；本体素/三角网/凸包 + CCD 原生，
 > 复合体按**并集凸包**近似，关节未接桥（如实标注）。调优记录与 Node 侧基准见
 > [`VXL-OFFLINE.md`](VXL-OFFLINE.md)。
@@ -36,7 +36,7 @@ npm run preview      # 预览构建结果
 npm run typecheck    # 仅类型检查
 ```
 
-**离线侧（vxl-phys 桥）指令**：`npm run build:vxl` 构建桥 → **必须再 `npm run build`**
+**离线侧（BSHSQ-Solver 桥）指令**：`npm run build:vxl` 构建桥 → **必须再 `npm run build`**
 （preview 服的是 `dist/`，否则跑旧 wasm）→ `node scripts/vxl-node-bench.mjs` 快回路自检。
 详见 [`VXL-OFFLINE.md`](VXL-OFFLINE.md)。
 
@@ -86,21 +86,21 @@ dev server 已开启 `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Polic
 ?selftest=1                                # 自动跑完整兼容性自检矩阵
 ```
 
-`?selftest=1` 会把结果发布到 `window.__physarena_report`，方便脚本或 CI 读取。
+`?selftest=1` 会把结果发布到 `window.__bshsq_report`，方便脚本或 CI 读取。
 
 ### 脚本化
 
-页面里暴露了 `window.__physarena`：
+页面里暴露了 `window.__bshsq`：
 
 ```js
-await __physarena.selectEngine('physx5');
-await __physarena.selectScenario('pyramid');
-await __physarena.setBodies(500);
-await __physarena.runBench();          // 或 runSelfTest()
-__physarena.getBenchResults();
-__physarena.getSelfTestResults();
-__physarena.simStateSummary();         // 诊断：每个引擎的刚体数 / 非有限位姿 / 四元数模
-__physarena.renderProbe();             // 诊断：每个图层实际提交给渲染的实例矩阵分解
+await __bshsq.selectEngine('physx5');
+await __bshsq.selectScenario('pyramid');
+await __bshsq.setBodies(500);
+await __bshsq.runBench();          // 或 runSelfTest()
+__bshsq.getBenchResults();
+__bshsq.getSelfTestResults();
+__bshsq.simStateSummary();         // 诊断：每个引擎的刚体数 / 非有限位姿 / 四元数模
+__bshsq.renderProbe();             // 诊断：每个图层实际提交给渲染的实例矩阵分解
 ```
 
 `renderProbe()` 是定位"画面不对"的第一站：它按**图层分别**列出每个 mesh 的实例数、最大基向量长度、以及实例坐标的 min/max。位姿退化成单点（如 Jolt 那个 `y=[8.41, 8.41]`）一眼就能看出来，不必在渲染层猜。
@@ -113,7 +113,7 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 
 | 引擎 | 语言 | 后端 | 许可 | 求解器 |
 |---|---|---|---|---|
-| **vxl-phys (RUST WL)** | Rust | WASM | Apache-2.0 | 顺序冲量（软接触 + 摩擦锥；2 子步 × 3 迭代）+ 关节族（8 迭代）+ 增量 BVH + GJK/EPA |
+| **BSHSQ-Solver** | Rust | WASM | Apache-2.0 | 顺序冲量（软接触 + 摩擦锥；2 子步 × 3 迭代）+ 关节族（8 迭代）+ 增量 BVH + GJK/EPA |
 | **Rapier 3D** | Rust | WASM | Apache-2.0 | Impulse-based (TGS Soft) + 动态 BVH |
 | **Jolt Physics** | C++ | WASM | MIT | 顺序冲量 + 岛式并行 + SIMD |
 | **NVIDIA PhysX 5** | C++ | WASM | BSD-3-Clause | TGS/PGS，GPU 兼容架构 |
@@ -123,7 +123,7 @@ __physarena.renderProbe();             // 诊断：每个图层实际提交给�
 | **cannon-es** | TypeScript | 纯 JS | MIT | Sequential Impulse + SAP 宽相位 |
 | **Oimo.js** | JavaScript | 纯 JS | MIT | Sequential Impulse |
 
-> **vxl-phys** 是配套自研引擎（全 f32、零外部依赖、`#![forbid(unsafe_code)]`、固定输入
+> **BSHSQ-Solver** 是配套自研引擎（全 f32、零外部依赖、`#![forbid(unsafe_code)]`、固定输入
 > 逐位可复现）。经 `wasm-bridge/`（同样零 unsafe：Rust 侧缓冲 + 导出数据指针）接入。
 > 原生支持 盒/球/凸包/三角网 + **关节族**（球/转动/固定/棱柱/距离 + **速度马达**；
 > 关节限位未实现，用到即标注）+ CCD；复合体按**并集凸包**近似（标注）。
@@ -219,7 +219,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 
 **p50 单步耗时（ms，越低越好）**
 
-| 场景 | vxl-phys | Rapier | Jolt | PhysX 5 | Bullet | Havok | Crashcat | cannon-es | Oimo |
+| 场景 | BSHSQ-Solver | Rapier | Jolt | PhysX 5 | Bullet | Havok | Crashcat | cannon-es | Oimo |
 |---|---|---|---|---|---|---|---|---|---|
 | 金字塔堆叠（210 体） | 1.70 | 0.98 | 1.45 | **0.42** | 3.74 | 0.53 | 1.62 | 3.22 | 1.95 |
 | 砖墙（200 体） | 1.36 | 0.76 | 0.15 | 0.38 | 3.42 | 0.49 | 1.25 | 3.49 | **0.04**※ |
@@ -243,14 +243,14 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 −4.1%、参与式降点 −7.3%）。
 
 **读法**：这是"各引擎默认参数 + 浏览器 wasm/asm.js"的横向对比，不是等算力的对比——
-每个引擎的默认迭代数、SIMD、并行策略都由它自己决定。自研引擎（vxl-phys）当前定位：
+每个引擎的默认迭代数、SIMD、并行策略都由它自己决定。自研引擎（BSHSQ-Solver）当前定位：
 **中游偏上**（平均 1.12 ms，9 引擎第 4）。金字塔**距 Jolt 的差距从 1.47× 收窄到
 1.17×**（1.92 vs 1.31 → 1.70 vs 1.45），距 Rapier ≈1.7×、距 PhysX ≈4×。
 它的长项是**确定性**（同输入逐位可复现，上表每格都带状态哈希）与**零依赖/零 unsafe**；
 调优史见 [`VXL-OFFLINE.md`](VXL-OFFLINE.md)（金字塔从 9.47 压到 1.70 ms）。
 
 **读法**：这是"各引擎默认参数 + 浏览器 wasm/asm.js"的横向对比，不是等算力的对比——
-每个引擎的默认迭代数、SIMD、并行策略都由它自己决定。自研引擎（vxl-phys）当前定位：
+每个引擎的默认迭代数、SIMD、并行策略都由它自己决定。自研引擎（BSHSQ-Solver）当前定位：
 **中游偏上**（平均 1.17 ms，9 引擎第 4；金字塔/砖墙/球坑/三角网距第一梯队 ≈1.3–2.5×，
 关节场景已接桥、与 Rapier/PhysX/Havok/Crashcat 同列可比）。它的长项是**确定性**
 （同输入逐位可复现，上表每格都带状态哈希）与**零依赖/零 unsafe**；调优史见
@@ -307,10 +307,10 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 | cannon-es | 15 | 4 | 0 |
 | Jolt Physics | 13 | 6 | 0 |
 | PhysX 5 | 13 | 6 | 0 |
-| vxl-phys (RUST WL) | 15 | 4 | 0 |
+| BSHSQ-Solver | 15 | 4 | 0 |
 | Oimo.js | 10 | 9 | 0 |
 
-「降级」= 通过，但部分能力被替换或关闭，悬停每一格可以看到具体原因。**没有任何一项是静默失败**——不支持的形状、被跳过的关节、被近似的约束都会标注出来。（vxl-phys 的 4 项降级全部是**几何近似**：胶囊/圆柱/圆锥→凸包、复合体→并集凸包；**5 个关节探针已全部转正**。）
+「降级」= 通过，但部分能力被替换或关闭，悬停每一格可以看到具体原因。**没有任何一项是静默失败**——不支持的形状、被跳过的关节、被近似的约束都会标注出来。（BSHSQ-Solver 的 4 项降级全部是**几何近似**：胶囊/圆柱/圆锥→凸包、复合体→并集凸包；**5 个关节探针已全部转正**。）
 
 「降级」= 通过，但部分能力被替换或关闭，悬停每一格可以看到具体原因。**没有任何一项是静默失败**——不支持的形状、被跳过的关节、被近似的约束都会标注出来。
 
@@ -332,7 +332,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 
 | 引擎 | 步 p50 | 步 p95 | 物理 FPS | 仿真时间 | 步数 | 动态刚体 | 接触对 | 内存 | 相对最快 |
 |---|---|---|---|---|---|---|---|---|---|
-| vxl-phys | 0.03 ms | 0.04 ms | 60 | 23.5 s | 1,412 | 300 | — | — | 1.00× |
+| BSHSQ-Solver | 0.03 ms | 0.04 ms | 60 | 23.5 s | 1,412 | 300 | — | — | 1.00× |
 | Rapier 3D | 0.04 ms | 0.05 ms | 60 | 23.4 s | 1,407 | 300 | — | — | 1.40× |
 
 绿色为该列最优、红色为最差。**「仿真时间」和「步数」是两列关键护栏**：各自独立积分意味着帧率不同就会停在不同时刻，此时「相对最快」是误导性数字——实测遇到过一次 `37.75×`，那是因为一侧已经跑到 27 秒、刚体全部休眠（0.02 ms），另一侧才刚起步。现在步数相差超过 1.5 倍会直接给出警告。
@@ -403,7 +403,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 
 **接触对是最有解释力的一列。** 它比刚体数更能说明代价：同样 60 个刚体，全部休眠时是 0 对接触，密集堆叠时可能上百对。
 
-`__physarena.metrics()` 导出扁平化的全部指标，便于脚本比对或写进报告。
+`__bshsq.metrics()` 导出扁平化的全部指标，便于脚本比对或写进报告。
 
 ## 守卫（兜底）
 
@@ -418,7 +418,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 - **启动隔离**：渲染器注册表用 `allSettled` 加载；任何一个渲染器模块加载失败只把它自己从列表里去掉，不影响启动。
 - **软栅配额**：Canvas2D 超过三角形 / 实例预算时降质量，并记一条「配额降级」。
 
-守卫事件实时显示在指标面板的「守卫」一节，也可以通过 `__physarena.guardLog()` 读取。
+守卫事件实时显示在指标面板的「守卫」一节，也可以通过 `__bshsq.guardLog()` 读取。
 
 ## 导入自己的模型
 
@@ -499,7 +499,7 @@ interface IPhysicsEngine {
 
 ### 三处刻意的设计
 
-**固定步长归 PhysArena 管。** `Simulation` 持有累加器，每个引擎每帧收到完全相同的 dt 序列。让引擎自己管累加器（例如 cannon-es 的 `world.step(dt, timeSinceLastCalled, maxSubSteps)`）就没法比较了。
+**固定步长归 BSHSQ 管。** `Simulation` 持有累加器，每个引擎每帧收到完全相同的 dt 序列。让引擎自己管累加器（例如 cannon-es 的 `world.step(dt, timeSinceLastCalled, maxSubSteps)`）就没法比较了。
 
 **形状降级是显式的。** 引擎缺某个原始体时按 `圆锥 → 凸包 → 盒` 逐级降级，并在检视面板里标出来。静默替换会让跑分数字失去意义。
 
@@ -520,7 +520,7 @@ interface IPhysicsEngine {
 - **Oimo.js** 只认球 / 盒 / 圆柱，只接受欧拉角（度）作为初始旋转；`jointDistance` 实测拉不住物体（9.4 m 漂移），因此不提供；关节限位的 `0` 会被引擎的 `||` 默认值替换为 1 rad，适配器已按微小非零值规避。
 - **Bullet** 是 asm.js 构建，大场景下明显慢，跑分时可能触及 30 秒上限；它的绑定没有暴露激活状态，休眠只能报告为「未上报」。传感器标志与 CCD 阈值按形状尺寸设置（此前是硬编码 0.05）。
 - **Crashcat** 目前是 0.0.5，API 仍在稳定中；CCD 是**创建期设置**（`motionQuality`），此前的 `setMotionQuality?.(...)` 调用在 0.0.5 里不存在、被可选链静默吞掉——现在走创建设置。
-- **vxl-phys**（自研，已在台上）：桥接 盒/球/凸包/**三角网**/**关节族**（球/转动/固定/棱柱/距离 + **速度马达**，桥 ABI `vxl_joint_add` / `vxl_joint_motor`）+ CCD + 材质与初始速度；复合体按**并集凸包**近似（标注）。**未实现**：关节**限位**（角度/行程，适配器逐条标注）、关节弹簧的软性（`spring` 退化为刚性距离并标注）、胶囊/圆柱/圆锥的原生形状（→凸包）。调优与回归基准见 [`VXL-OFFLINE.md`](VXL-OFFLINE.md)。
+- **BSHSQ-Solver**（自研，已在台上）：桥接 盒/球/凸包/**三角网**/**关节族**（球/转动/固定/棱柱/距离 + **速度马达**，桥 ABI `vxl_joint_add` / `vxl_joint_motor`）+ CCD + 材质与初始速度；复合体按**并集凸包**近似（标注）。**未实现**：关节**限位**（角度/行程，适配器逐条标注）、关节弹簧的软性（`spring` 退化为刚性距离并标注）、胶囊/圆柱/圆锥的原生形状（→凸包）。调优与回归基准见 [`VXL-OFFLINE.md`](VXL-OFFLINE.md)。
 
 ### 渲染
 
@@ -589,7 +589,7 @@ interface IPhysicsEngine {
 跑分 8 引擎 × 8 场景全部完成（除 cannon-es 布娃娃触及 30 s 上限、如实标注不完整）。
 修复前/后矩阵快照各留一份：`out/selftest-before.json`（原版构建）与 `out/selftest.json`。
 **当前状态（9 引擎 + 关节接桥后）**：19 × 9 **0 失败**（`out/selftest-joints.json`，
-vxl-phys 15/4/0）；9 引擎 × 8 场景同批闲时跑分见 `out/bench-joints.json`。
+BSHSQ-Solver 15/4/0）；9 引擎 × 8 场景同批闲时跑分见 `out/bench-joints.json`。
 
 ### 其他
 

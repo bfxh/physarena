@@ -1,4 +1,4 @@
-//! # vxl-phys ↔ PhysArena wasm 桥
+//! # BSHSQ-Solver ↔ BSHSQ wasm 桥
 //!
 //! **零 unsafe** 的批量 ABI：
 //! - 写路径（JS → 引擎）：逐体调用（`vxl_add_box` / `vxl_add_sphere` /
@@ -89,7 +89,7 @@ pub extern "C" fn vxl_world_create(
     0
 }
 
-/// 释放世界（PhysArena 的 disposeWorld 会调用；下一次 `vxl_world_create` 亦可替换）。
+/// 释放世界（BSHSQ 的 disposeWorld 会调用；下一次 `vxl_world_create` 亦可替换）。
 #[unsafe(no_mangle)]
 pub extern "C" fn vxl_world_drop() -> u32 {
     B.with(|b| {
@@ -149,7 +149,7 @@ pub extern "C" fn vxl_add_sphere(
 }
 
 /// 胶囊体（局部 +Y 线段 ±half_height ⊕ 半径球）。适配层**已接线**（能力表已加 `capsule`，
-/// 自检 15/4/0 → 16/3/0）；窄相走**解析最近点** `capsule_axis_reach`，见 vxl-phys
+/// 自检 15/4/0 → 16/3/0）；窄相走**解析最近点** `capsule_axis_reach`，见 BSHSQ-Solver
 /// `EXPERIMENTS.md` R.2/R.3。
 #[unsafe(no_mangle)]
 pub extern "C" fn vxl_add_capsule(
@@ -432,7 +432,7 @@ pub extern "C" fn vxl_mesh_commit() -> u32 {
 
 /// 关节类型码（桥↔适配器约定）：0 球 / 1 转动 / 2 固定 / 3 棱柱 / 4 距离。
 ///
-/// 锚点与轴均为**体局部量**（与 PhysArena 的 `JointDesc` 同口径）：
+/// 锚点与轴均为**体局部量**（与 BSHSQ 的 `JointDesc` 同口径）：
 /// 局部轴按各自体的姿态进世界系 ⇒ yaw 旋转过的刚体（如布娃娃的四肢）也能
 /// 拿到正确的折弯轴，不需要调用方预先把轴转好。
 /// 返回 0 = 成功，1 = 无世界，2 = 体索引越界。

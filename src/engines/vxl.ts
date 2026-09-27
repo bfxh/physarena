@@ -29,7 +29,7 @@ const JOINT_CODES: Record<string, number> = {
 };
 
 /**
- * The 9th contender: **vxl-phys**, the engine this lab was built alongside
+ * The 9th contender: **BSHSQ-Solver**, the engine this lab was built alongside
  * (Rust, zero external dependencies, `#![forbid(unsafe_code)]`, bitwise
  * reproducible for a fixed input).
  *
@@ -39,8 +39,8 @@ const JOINT_CODES: Record<string, number> = {
  */
 
 export const meta: EngineMeta = {
-  id: 'vxl-phys',
-  name: 'vxl-phys (RUST WL)',
+  id: 'BSHSQ-Solver',
+  name: 'BSHSQ-Solver',
   language: 'Rust',
   backend: 'WASM',
   license: 'Apache-2.0',
@@ -119,10 +119,10 @@ class VxlEngine extends PhysicsEngineBase {
     const { instance } = await WebAssembly.instantiate(bytes, {});
     const ex = instance.exports as unknown as BridgeExports;
     if (typeof ex.vxl_abi !== 'function') {
-      throw new Error('vxl-phys wasm 桥的 ABI 不匹配（缺少 vxl_abi 导出）');
+      throw new Error('BSHSQ-Solver wasm 桥的 ABI 不匹配（缺少 vxl_abi 导出）');
     }
     const abi = ex.vxl_abi();
-    if (abi !== 1) throw new Error(`vxl-phys wasm 桥 ABI 版本 ${abi}，本适配器需要 1`);
+    if (abi !== 1) throw new Error(`BSHSQ-Solver wasm 桥 ABI 版本 ${abi}，本适配器需要 1`);
     this.ex = ex;
   }
 
@@ -169,7 +169,7 @@ class VxlEngine extends PhysicsEngineBase {
           ex.vxl_mesh_push_tri(shape.indices[i], shape.indices[i + 1], shape.indices[i + 2]);
         }
         if (ex.vxl_mesh_commit() === 0) return -1; // 提供者体：已在引擎内注册
-        this.notes.add('vxl-phys: 三角网提交失败→盒');
+        this.notes.add('BSHSQ-Solver: 三角网提交失败→盒');
         return ex.vxl_add_box(1.0, 0.1, 1.0, px, py, pz, density, isStatic);
       }
       case 'compound': {
@@ -178,7 +178,7 @@ class VxlEngine extends PhysicsEngineBase {
         for (const child of shape.children) {
           const [ox, oy, oz] = child.offset ?? [0, 0, 0];
           if (child.rotation) {
-            this.notes.add('vxl-phys: 复合体子形状旋转暂不支持→忽略');
+            this.notes.add('BSHSQ-Solver: 复合体子形状旋转暂不支持→忽略');
           }
           const cs = child.shape;
           if (cs.kind === 'sphere') {
@@ -188,7 +188,7 @@ class VxlEngine extends PhysicsEngineBase {
               cs.halfExtents[0], cs.halfExtents[1], cs.halfExtents[2], ox, oy, oz,
             );
           } else {
-            this.notes.add(`vxl-phys: 复合体子形状 ${cs.kind} 暂不支持→跳过`);
+            this.notes.add(`BSHSQ-Solver: 复合体子形状 ${cs.kind} 暂不支持→跳过`);
           }
         }
         return ex.vxl_compound_commit(px, py, pz, density, isStatic);
@@ -244,7 +244,7 @@ class VxlEngine extends PhysicsEngineBase {
       const adapted = adaptShape(b.shape, meta.capabilities.shapes);
       if (adapted.note) this.notes.add(adapted.note);
       if (adapted.shape.kind === 'convex' && b.type === 'static') {
-        this.notes.add('vxl-phys: 静态凸包→盒（桥的壳路径为动态体）');
+        this.notes.add('BSHSQ-Solver: 静态凸包→盒（桥的壳路径为动态体）');
       }
       const idx = this.addShape(adapted.shape, b);
       if (idx === -1) {
@@ -254,7 +254,7 @@ class VxlEngine extends PhysicsEngineBase {
         continue;
       }
       if (idx === 0xffffffff) {
-        this.notes.add('vxl-phys: 体创建失败（凸包点不足）');
+        this.notes.add('BSHSQ-Solver: 体创建失败（凸包点不足）');
         continue;
       }
       const q = quatOr(b.rotation);
@@ -270,7 +270,7 @@ class VxlEngine extends PhysicsEngineBase {
     }
     this.bodyCount = ex.vxl_body_count();
     if (this.bodyCount !== desc.bodies.length) {
-      this.notes.add(`vxl-phys: 桥内体数 ${this.bodyCount} ≠ 场景体数 ${desc.bodies.length}`);
+      this.notes.add(`BSHSQ-Solver: 桥内体数 ${this.bodyCount} ≠ 场景体数 ${desc.bodies.length}`);
     }
     // Joints go through `vxl_joint_add` (kind codes 0..4). Anchors and axes are
     // body-local on both sides of the boundary, so nothing needs converting.
@@ -298,16 +298,16 @@ class VxlEngine extends PhysicsEngineBase {
       if (j.motor && (j.kind === 'revolute' || j.kind === 'prismatic')) {
         // 速度马达（目标角速度/线速度 + 力钳）；引擎侧已按 max_force·dt 上钳。
         const mrc = ex.vxl_joint_motor(jointIndex, j.motor.targetVelocity, j.motor.maxForce);
-        if (mrc !== 0) this.notes.add('vxl-phys: 马达装配失败（索引越界？）');
+        if (mrc !== 0) this.notes.add('BSHSQ-Solver: 马达装配失败（索引越界？）');
       }
       if (j.limits && (j.kind === 'revolute' || j.kind === 'prismatic')) {
         // 转动限位（rad，绕自由轴）/ 棱柱行程限位（m，沿轴）：引擎侧都用**当前
         // 相对姿态/锚点几何**直接算，无跨帧累计状态 ⇒ 无漂移。
         const lrc = ex.vxl_joint_limit(jointIndex, j.limits[0], j.limits[1]);
-        if (lrc !== 0) this.notes.add('vxl-phys: 限位装配失败（索引越界？）');
+        if (lrc !== 0) this.notes.add('BSHSQ-Solver: 限位装配失败（索引越界？）');
       }
       if (j.kind === 'spring') {
-        this.notes.add('vxl-phys: spring→刚性距离（stiffness/damping 未实现）');
+        this.notes.add('BSHSQ-Solver: spring→刚性距离（stiffness/damping 未实现）');
       }
       jointIndex++;
     }
@@ -318,7 +318,7 @@ class VxlEngine extends PhysicsEngineBase {
     if (rc !== 0) {
       // The engine runs a fixed 1/60 step; a different dt must fail loudly
       // rather than silently change the benchmark's dt contract.
-      throw new Error(`vxl-phys: 固定步不匹配（收到 dt=${dt}，引擎步长 ${1 / 60}）`);
+      throw new Error(`BSHSQ-Solver: 固定步不匹配（收到 dt=${dt}，引擎步长 ${1 / 60}）`);
     }
   }
 

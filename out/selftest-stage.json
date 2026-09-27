@@ -1,7 +1,7 @@
 [
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "bootMs": 27.150000005960464,
@@ -61,7 +61,7 @@
         "probeName": "复合体下落静止",
         "group": "形状",
         "status": "degraded",
-        "detail": "通过，但vxl-phys: 复合体→并集凸包（子体各取 AABB 角点）"
+        "detail": "通过，但BSHSQ-Solver: 复合体→并集凸包（子体各取 AABB 角点）"
       },
       {
         "probeId": "shape-trimesh",
@@ -75,35 +75,35 @@
         "probeName": "球形铰链悬挂",
         "group": "约束",
         "status": "degraded",
-        "detail": "引擎不支持该约束（vxl-phys: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
+        "detail": "引擎不支持该约束（BSHSQ-Solver: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
       },
       {
         "probeId": "joint-revolute",
         "probeName": "转动关节悬挂",
         "group": "约束",
         "status": "degraded",
-        "detail": "引擎不支持该约束（vxl-phys: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
+        "detail": "引擎不支持该约束（BSHSQ-Solver: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
       },
       {
         "probeId": "joint-fixed",
         "probeName": "固定关节悬挂",
         "group": "约束",
         "status": "degraded",
-        "detail": "引擎不支持该约束（vxl-phys: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.3 m）"
+        "detail": "引擎不支持该约束（BSHSQ-Solver: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.3 m）"
       },
       {
         "probeId": "joint-prismatic",
         "probeName": "棱柱关节悬挂",
         "group": "约束",
         "status": "degraded",
-        "detail": "引擎不支持该约束（vxl-phys: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
+        "detail": "引擎不支持该约束（BSHSQ-Solver: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点分离 8.750 m（上限 0.2 m）"
       },
       {
         "probeId": "joint-distance",
         "probeName": "距离关节悬挂",
         "group": "约束",
         "status": "degraded",
-        "detail": "引擎不支持该约束（vxl-phys: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点间距 9.40 m，期望 ≈ 1.2 m"
+        "detail": "引擎不支持该约束（BSHSQ-Solver: 关节尚未接桥（facade 无关节 API），关节场景按自由刚体运行）：锚点间距 9.40 m，期望 ≈ 1.2 m"
       },
       {
         "probeId": "stability-stack",

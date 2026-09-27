@@ -1,4 +1,4 @@
-// PhysArena 场景验收（playwright-core + 本机 msedge）。
+// BSHSQ 场景验收（playwright-core + 本机 msedge）。
 //
 // 用法：
 //   npm run preview
@@ -29,7 +29,7 @@ function readFlag(name) {
 /** Y span of every renderer layer, plus the body count, for one moment in time. */
 async function snapshot(page) {
   return page.evaluate(() => {
-    const a = window.__physarena;
+    const a = window.__bshsq;
     const m = a.metrics();
     const pick = (k) => {
       for (const r of m) if (r.key === k) return r.value;
@@ -73,13 +73,13 @@ async function main() {
     waitUntil: 'load',
     timeout: 60000,
   });
-  await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
   await page.waitForTimeout(15000);
 
   const all = await page.evaluate(() =>
     Array.from(document.querySelectorAll('.pa-scenario')).map((b) => b.textContent || ''),
   );
-  let ids = await page.evaluate(() => window.__physarena.listScenarios().map((s) => ({ id: s.id, group: s.group })));
+  let ids = await page.evaluate(() => window.__bshsq.listScenarios().map((s) => ({ id: s.id, group: s.group })));
   if (!Array.isArray(ids) || ids.length === 0) {
     // Fall back to the DOM if the hook is not exposed yet.
     ids = all.map((t) => ({ id: '', group: '' }));
@@ -92,7 +92,7 @@ async function main() {
   for (const s of ids) {
     if (!s.id) continue;
     const t0 = Date.now();
-    await page.evaluate((id) => window.__physarena.selectScenario(id), s.id);
+    await page.evaluate((id) => window.__bshsq.selectScenario(id), s.id);
     await page.waitForTimeout(1200);
     const early = await snapshot(page);
     // Fluid needs time to fall and level; rigid scenes just need to settle.

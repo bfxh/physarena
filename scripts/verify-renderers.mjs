@@ -1,4 +1,4 @@
-// PhysArena 验收检测（渲染轴 + 物理冒烟）。
+// BSHSQ 验收检测（渲染轴 + 物理冒烟）。
 //
 // 用法：
 //   npm run preview                     # 另开一个终端
@@ -64,16 +64,16 @@ async function sampleAll(page, ids) {
     const out = [];
     for (const id of list) {
       try {
-        await window.__physarena.selectRenderer(id);
+        await window.__bshsq.selectRenderer(id);
         await new Promise((r) => setTimeout(r, id === 'babylon' ? 6000 : 2600));
-        const rec = { id, cur: window.__physarena.currentRenderer(), sample: sample() };
-        const m = window.__physarena.metrics();
+        const rec = { id, cur: window.__bshsq.currentRenderer(), sample: sample() };
+        const m = window.__bshsq.metrics();
         for (const row of m) {
           if (row.key === 'r-triangles') rec.triangles = row.value;
           if (row.key === 'r-instances') rec.instances = row.value;
           if (row.key === 'step-p50') rec.stepP50 = row.value;
         }
-        rec.guards = window.__physarena.guardLog().length;
+        rec.guards = window.__bshsq.guardLog().length;
         out.push(rec);
       } catch (e) {
         out.push({ id, error: String((e && e.message) || e).slice(0, 90) });
@@ -109,12 +109,12 @@ async function run() {
   // 这个问题真发生过，整批 GL 后端被误报 FAIL。
   const startUrl = `${BASE}/?engine=rapier3d&scene=pyramid&bodies=40&renderer=three&preserveBuffer=1`;
   await page.goto(startUrl, { waitUntil: 'load', timeout: 60000 });
-  await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
   // 冷缓存下 Babylon 的 chunk 有 6 MB，首屏给它留时间。
   await page.waitForTimeout(20000);
 
   const list = await page.evaluate(() =>
-    window.__physarena.listRenderers().map((r) => ({
+    window.__bshsq.listRenderers().map((r) => ({
       id: r.id,
       name: r.name,
       unavailable: r.unavailable || null,
@@ -165,16 +165,16 @@ async function run() {
       const out = [];
       for (const id of ids) {
         try {
-          await window.__physarena.selectEngine(id);
+          await window.__bshsq.selectEngine(id);
           await new Promise((r) => setTimeout(r, 3200));
-          const m = window.__physarena.metrics();
+          const m = window.__bshsq.metrics();
           const row = { id, engine: '?', step: '?', bodies: '?' };
           for (const r of m) {
             if (r.key === 'id-engine') row.engine = r.value;
             if (r.key === 'step-p50') row.step = r.value;
             if (r.key === 'bodies-total') row.bodies = r.value;
           }
-          row.nonFinite = JSON.stringify(window.__physarena.simStateSummary()).includes('NaN');
+          row.nonFinite = JSON.stringify(window.__bshsq.simStateSummary()).includes('NaN');
           out.push(row);
         } catch (e) {
           out.push({ id, error: String((e && e.message) || e).slice(0, 80) });

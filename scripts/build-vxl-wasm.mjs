@@ -1,7 +1,7 @@
-// 构建 vxl-phys（RUST WL）的 wasm 桥并把产物放进 public/vendor/vxl/。
+// 构建 BSHSQ-Solver的 wasm 桥并把产物放进 public/vendor/vxl/。
 //
 // 依赖：Rust 工具链 + wasm32-unknown-unknown 目标（rustup target add wasm32-unknown-unknown）。
-// 桥 crate 在 ./wasm-bridge/，path 依赖 ../RUST WL/crates（引擎仓）。引擎 crates
+// 桥 crate 在 ./wasm-bridge/，path 依赖 ..//crates（引擎仓）。引擎 crates
 // 保持 `#![forbid(unsafe_code)]`；桥本身零 unsafe 块（本脚本附带一次源码检查）。
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE = join(ROOT, 'wasm-bridge');
-const ENGINE = process.env.VXL_ENGINE_DIR ?? resolve(ROOT, '..', 'RUST WL');
+const ENGINE = process.env.VXL_ENGINE_DIR ?? resolve(ROOT, '..', '');
 const OUT_DIR = join(ROOT, 'public', 'vendor', 'vxl');
 const WASM = join(BRIDGE, 'target', 'wasm32-unknown-unknown', 'release', 'vxl_phys_wasm.wasm');
 

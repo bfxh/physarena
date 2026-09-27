@@ -77,7 +77,7 @@ class PhysX5Engine extends PhysicsEngineBase {
     // the URL is identical in dev and in the production bundle.
     // BASE_URL, not an absolute path: under the Pages sub-path an absolute
     // /vendor/... hits the domain root and 404s, which read as "wasm fetch
-    // failed". Vite injects the base ("/" locally, "/physarena/" on Pages).
+    // failed". Vite injects the base ("/" locally, "/bshsq/" on Pages).
     this.P = await PhysXInit({
       locateFile: () => `${import.meta.env.BASE_URL}vendor/physx/physx-js-webidl.wasm`,
     });

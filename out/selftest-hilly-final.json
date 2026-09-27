@@ -1,7 +1,7 @@
 [
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "bootMs": 17.714999996125698,

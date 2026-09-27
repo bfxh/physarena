@@ -1,4 +1,4 @@
-// PhysArena 无头驱动（playwright-core + 本机 Edge）。
+// BSHSQ 无头驱动（playwright-core + 本机 Edge）。
 //
 // 用法：
 //   node scripts/arena-drive.mjs selftest        # 跑完整自检矩阵，落盘 `out/selftest${OUT_TAG}.json`
@@ -29,15 +29,15 @@ page.on('response', (r) => {
 
 console.log(`[arena-drive] ${task} @ ${BASE}`);
 await page.goto(`${BASE}/?${task === 'selftest' ? 'selftest=1' : ''}`, { waitUntil: 'load', timeout: 60000 });
-await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
+await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
 
 if (task === 'selftest') {
   // ?selftest=1 already started the run; wait for the report to be published.
   console.log('[arena-drive] 等待自检矩阵完成…');
-  await page.waitForFunction(() => Array.isArray(window.__physarena_report), null, {
+  await page.waitForFunction(() => Array.isArray(window.__bshsq_report), null, {
     timeout: 30 * 60 * 1000,
   });
-  const report = await page.evaluate(() => window.__physarena_report);
+  const report = await page.evaluate(() => window.__bshsq_report);
   writeFileSync(`out/selftest${OUT_TAG}.json`, JSON.stringify(report, null, 2));
   const summary = report.map((r) => ({
     engine: r.engineName,
@@ -59,11 +59,11 @@ if (task === 'selftest') {
   for (const f of fails) console.log('  ✘ ' + f);
 } else if (task === 'bench') {
   // A compact engine x scenario sweep that exercises every class of scene.
-  const engines = ['vxl-phys', 'rapier3d', 'jolt', 'physx5', 'havok', 'bullet', 'crashcat', 'cannon-es', 'oimo'];
+  const engines = ['BSHSQ-Solver', 'rapier3d', 'jolt', 'physx5', 'havok', 'bullet', 'crashcat', 'cannon-es', 'oimo'];
   const scenarios = ['pyramid', 'brick-wall', 'ball-pit', 'chain-hinge', 'ccd-onslaught', 'trimesh-terrain', 'ragdoll', 'spring-net'];
   console.log(`[arena-drive] 跑分：${engines.length} 引擎 × ${scenarios.length} 场景`);
   const results = await page.evaluate(
-    ({ engines: ids, scenarios: scs }) => window.__physarena.runBenchCells(ids, scs),
+    ({ engines: ids, scenarios: scs }) => window.__bshsq.runBenchCells(ids, scs),
     { engines, scenarios },
   );
   writeFileSync(`out/bench${OUT_TAG}.json`, JSON.stringify(results, null, 2));

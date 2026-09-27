@@ -189,7 +189,7 @@ export class App {
     requestAnimationFrame(this.loop);
 
     // ?selftest=1 boots every engine and publishes the compatibility matrix
-    // on window.__physarena_report so CI or a script can read it.
+    // on window.__bshsq_report so CI or a script can read it.
     if (new URLSearchParams(location.search).has('selftest')) {
       (this.root.querySelector('[data-mode="bench"]') as HTMLElement | null)?.click();
       void this.runSelfTestNow();
@@ -261,7 +261,7 @@ export class App {
     const header = h(
       'header',
       { class: 'pa-header' },
-      h('div', { class: 'pa-brand' }, h('b', { text: 'PhysArena' }), h('span', { text: '浏览器物理引擎测试场' })),
+      h('div', { class: 'pa-brand' }, h('b', { text: 'BSHSQ' }), h('span', { text: '浏览器物理引擎测试场' })),
       controls,
       modeButtons,
       headerRight,
@@ -1553,10 +1553,10 @@ export class App {
           onclick: () => void this.runBench(),
         }),
         this.benchResults.length
-          ? h('button', { class: 'pa-btn', style: 'margin-left:6px', text: '导出 CSV', onclick: () => download('physarena-bench.csv', resultsToCsv(this.benchResults), 'text/csv') })
+          ? h('button', { class: 'pa-btn', style: 'margin-left:6px', text: '导出 CSV', onclick: () => download('bshsq-bench.csv', resultsToCsv(this.benchResults), 'text/csv') })
           : null,
         this.benchResults.length
-          ? h('button', { class: 'pa-btn', style: 'margin-left:6px', text: '导出 JSON', onclick: () => download('physarena-bench.json', JSON.stringify(this.benchResults, null, 2), 'application/json') })
+          ? h('button', { class: 'pa-btn', style: 'margin-left:6px', text: '导出 JSON', onclick: () => download('bshsq-bench.json', JSON.stringify(this.benchResults, null, 2), 'application/json') })
           : null,
       ),
       this.benchRunning || this.benchProgress.message
@@ -1573,7 +1573,7 @@ export class App {
 
   /** Exposes a small API so the lab can be driven from a script or CI. */
   private exposeAutomationHooks(): void {
-    (window as unknown as Record<string, unknown>).__physarena = {
+    (window as unknown as Record<string, unknown>).__bshsq = {
       engineIds: () => this.engines.map((e) => e.meta.id),
       scenarioIds: () => this.scenarios.map((s) => s.id),
       selectEngine: (id: string) => this.selectEngine(id),
@@ -1745,7 +1745,7 @@ export class App {
     }
     this.selfTestRunning = false;
     this.selfTestMessage = '完成';
-    (window as unknown as Record<string, unknown>).__physarena_report = this.selfTestRows;
+    (window as unknown as Record<string, unknown>).__bshsq_report = this.selfTestRows;
     this.renderBenchPane();
     await this.activateForMode(true);
   }
@@ -1768,7 +1768,7 @@ export class App {
       this.selfTestRows.length
         ? h('button', {
             class: 'pa-btn', style: 'margin-left:6px', text: '导出 CSV',
-            onclick: () => download('physarena-selftest.csv', selfTestToCsv(this.selfTestRows), 'text/csv'),
+            onclick: () => download('bshsq-selftest.csv', selfTestToCsv(this.selfTestRows), 'text/csv'),
           })
         : null,
       this.selfTestRunning || this.selfTestRows.length

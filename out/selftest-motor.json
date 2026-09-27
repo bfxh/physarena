@@ -1,7 +1,7 @@
 [
   {
-    "engineId": "vxl-phys",
-    "engineName": "vxl-phys (RUST WL)",
+    "engineId": "BSHSQ-Solver",
+    "engineName": "BSHSQ-Solver",
     "language": "Rust",
     "backend": "WASM",
     "bootMs": 71.9699999988079,
@@ -61,7 +61,7 @@
         "probeName": "复合体下落静止",
         "group": "形状",
         "status": "degraded",
-        "detail": "通过，但vxl-phys: 复合体→并集凸包（子体各取 AABB 角点）"
+        "detail": "通过，但BSHSQ-Solver: 复合体→并集凸包（子体各取 AABB 角点）"
       },
       {
         "probeId": "shape-trimesh",
