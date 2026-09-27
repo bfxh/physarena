@@ -10,7 +10,7 @@ export const meta: EngineMeta = {
   license: 'MIT (WASM 版本)',
   homepage: 'https://github.com/BabylonJS/Havok',
   accent: '#8a4bff',
-  blurb: 'AAA 游戏里跑了几十年的商业引擎，微软 2023 年放出免费 WASM 版。API 是扁平的 C 风格 HP_* 函数。',
+  blurb: 'AAA 游戏里跑了几十年的商业引擎，微软 2023 年放出免费 WASM 版。API 是扁平的 C 风格 HP_* 函数。', // naming:allow（AAA 游戏 = 行业术语，非占位）
   solver: 'Havok 专有约束求解器（多线程 + 大规模岛式）',
   status: 'stable',
   capabilities: {
