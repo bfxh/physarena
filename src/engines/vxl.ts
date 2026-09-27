@@ -44,7 +44,7 @@ export const meta: EngineMeta = {
   language: 'Rust',
   backend: 'WASM',
   license: 'Apache-2.0',
-  homepage: 'https://github.com/bfxh/RUST-WL',
+  homepage: 'https://github.com/bfxh/BSHSQ',
   accent: '#e0533d',
   blurb: '配套自研引擎：全 f32、零外部依赖、逐位可复现的确定性顺序冲量求解器（增量 BVH + GJK/EPA）。',
   solver: '顺序冲量（软接触 + 摩擦锥）+ 分相管线（2 子步 × 3 迭代 × 内层 1 = 6 扫掠/帧）+ 岛级休眠 + 关节族（球/转动/固定/棱柱/距离，8 迭代）',

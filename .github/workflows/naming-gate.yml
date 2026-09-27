@@ -1,6 +1,6 @@
 # 命名纪律门（用户命名宪法：除主名外，一切命名必须专业）。
 # 本仓主名 = **PhysArena**（浏览器物理引擎测试场）；仓内第 9 个自研引擎的显示名
-# = **BSHSQ-Solver**（该引擎本体是 bfxh/BSHSQ，原 RUST-WL）。
+# = **BSHSQ-Solver**（该引擎本体是 bfxh/BSHSQ）。
 # 判据与豁免模型见 scripts/naming_gate.py 头注；与 ADV 同一门脚本，各自仓内自包含。
 name: naming-gate
 
@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      # 本仓无退役旧名（PhysArena 是主名）；引擎技术标识 vxl-phys 白名单记账
-      - name: 命名纪律门（占位词/杂物）
-        run: python -X utf8 scripts/naming_gate.py --allow-name vxl-phys --allow-name vxl_phys
+      # 退役旧名 = 自研引擎的旧仓名（现 BSHSQ），两种写法都防回流；
+      # 引擎技术标识 vxl-phys 白名单记账
+      - name: 命名纪律门（占位词/杂物/退役旧名）
+        run: python -X utf8 scripts/naming_gate.py --forbid "RUST WL" --forbid "RUST-WL" --allow-name vxl-phys --allow-name vxl_phys  # naming:allow（退役旧名作为门参数传入）
