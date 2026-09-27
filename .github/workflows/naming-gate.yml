@@ -21,4 +21,4 @@ jobs:
         with:
           python-version: '3.12'
       - name: 命名纪律门（占位词/杂物/退役旧名）
-        run: python -X utf8 scripts/naming_gate.py --forbid PhysArena --forbid "RUST WL" --allow-name vxl-phys --allow-name vxl_phys
+        run: python -X utf8 scripts/naming_gate.py --forbid PhysArena --forbid "RUST WL" --allow-name vxl-phys --allow-name vxl_phys  # naming:allow（退役旧名作为门参数传入）
