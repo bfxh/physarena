@@ -5,8 +5,8 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage();
 page.on('console', (m) => console.log('[page]', m.text()));
 await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
-await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
-await page.evaluate(() => window.__bshsq.selectEngine('physx5'));
+await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
+await page.evaluate(() => window.__physarena.selectEngine('physx5'));
 await page.waitForTimeout(4000);
 
 const out = await page.evaluate(async () => {

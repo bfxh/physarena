@@ -1,4 +1,4 @@
-# BSHSQ · 浏览器物理引擎测试场
+# PhysArena · 浏览器物理引擎测试场
 
 这是一个**双轴**测试场，两条轴互相独立、可自由搭配：
 
@@ -86,21 +86,21 @@ dev server 已开启 `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Polic
 ?selftest=1                                # 自动跑完整兼容性自检矩阵
 ```
 
-`?selftest=1` 会把结果发布到 `window.__bshsq_report`，方便脚本或 CI 读取。
+`?selftest=1` 会把结果发布到 `window.__physarena_report`，方便脚本或 CI 读取。
 
 ### 脚本化
 
-页面里暴露了 `window.__bshsq`：
+页面里暴露了 `window.__physarena`：
 
 ```js
-await __bshsq.selectEngine('physx5');
-await __bshsq.selectScenario('pyramid');
-await __bshsq.setBodies(500);
-await __bshsq.runBench();          // 或 runSelfTest()
-__bshsq.getBenchResults();
-__bshsq.getSelfTestResults();
-__bshsq.simStateSummary();         // 诊断：每个引擎的刚体数 / 非有限位姿 / 四元数模
-__bshsq.renderProbe();             // 诊断：每个图层实际提交给渲染的实例矩阵分解
+await __physarena.selectEngine('physx5');
+await __physarena.selectScenario('pyramid');
+await __physarena.setBodies(500);
+await __physarena.runBench();          // 或 runSelfTest()
+__physarena.getBenchResults();
+__physarena.getSelfTestResults();
+__physarena.simStateSummary();         // 诊断：每个引擎的刚体数 / 非有限位姿 / 四元数模
+__physarena.renderProbe();             // 诊断：每个图层实际提交给渲染的实例矩阵分解
 ```
 
 `renderProbe()` 是定位"画面不对"的第一站：它按**图层分别**列出每个 mesh 的实例数、最大基向量长度、以及实例坐标的 min/max。位姿退化成单点（如 Jolt 那个 `y=[8.41, 8.41]`）一眼就能看出来，不必在渲染层猜。
@@ -403,7 +403,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 
 **接触对是最有解释力的一列。** 它比刚体数更能说明代价：同样 60 个刚体，全部休眠时是 0 对接触，密集堆叠时可能上百对。
 
-`__bshsq.metrics()` 导出扁平化的全部指标，便于脚本比对或写进报告。
+`__physarena.metrics()` 导出扁平化的全部指标，便于脚本比对或写进报告。
 
 ## 守卫（兜底）
 
@@ -418,7 +418,7 @@ HUD 显示当前步耗时、p50 / p95、峰值、等效物理 FPS 与渲染 FPS�
 - **启动隔离**：渲染器注册表用 `allSettled` 加载；任何一个渲染器模块加载失败只把它自己从列表里去掉，不影响启动。
 - **软栅配额**：Canvas2D 超过三角形 / 实例预算时降质量，并记一条「配额降级」。
 
-守卫事件实时显示在指标面板的「守卫」一节，也可以通过 `__bshsq.guardLog()` 读取。
+守卫事件实时显示在指标面板的「守卫」一节，也可以通过 `__physarena.guardLog()` 读取。
 
 ## 导入自己的模型
 
@@ -499,7 +499,7 @@ interface IPhysicsEngine {
 
 ### 三处刻意的设计
 
-**固定步长归 BSHSQ 管。** `Simulation` 持有累加器，每个引擎每帧收到完全相同的 dt 序列。让引擎自己管累加器（例如 cannon-es 的 `world.step(dt, timeSinceLastCalled, maxSubSteps)`）就没法比较了。
+**固定步长归 PhysArena 管。** `Simulation` 持有累加器，每个引擎每帧收到完全相同的 dt 序列。让引擎自己管累加器（例如 cannon-es 的 `world.step(dt, timeSinceLastCalled, maxSubSteps)`）就没法比较了。
 
 **形状降级是显式的。** 引擎缺某个原始体时按 `圆锥 → 凸包 → 盒` 逐级降级，并在检视面板里标出来。静默替换会让跑分数字失去意义。
 

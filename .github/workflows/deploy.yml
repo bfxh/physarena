@@ -1,4 +1,4 @@
-# Deploys BSHSQ to GitHub Pages on every push to main.
+# Deploys PhysArena to GitHub Pages on every push to main.
 #
 # The site is the deliverable: opening the published URL must give a working
 # lab with no local build step. Everything the engines need (the .wasm payloads

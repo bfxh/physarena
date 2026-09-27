@@ -1,9 +1,9 @@
 {
-  "name": "bshsq",
+  "name": "physarena",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "BSHSQ - browser physics engine benchmark lab: 9 engines (incl. BSHSQ-Solver), 40 scenarios, hot-swap comparison",
+  "description": "PhysArena - browser physics engine benchmark lab: 9 engines (incl. BSHSQ-Solver), 40 scenarios, hot-swap comparison",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "predev": "node scripts/vendor.mjs",

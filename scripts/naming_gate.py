@@ -4,7 +4,7 @@
   1. 禁占位/随意命名：foo/bar/baz、test123、untitled、asdf、aaa+、xxx+、placeholder、  # naming:allow（本门词表/用法示例，扫描器自指豁免）
      lorem ipsum 作为独立词出现在代码与文档（测试夹具/第三方引用路径由行级豁免标记放行）；  # naming:allow（本门词表/用法示例，扫描器自指豁免）
   2. 禁口语副名：主名白名单之外的「项目名/品牌名 + 口语括注」——用 --forbid 显式登记
-     需要退役的旧名（如 PhysArena 改 BSHSQ 时登记 PhysArena/RUST WL，改名后一段时间内  # naming:allow（本门词表/用法示例，扫描器自指豁免）
+     需要退役的旧名（如 PhysArena 改 PhysArena 时登记 PhysArena/RUST WL，改名后一段时间内  # naming:allow（本门词表/用法示例，扫描器自指豁免）
      保持零命中，防止旧名从文档回流）；
   3. 禁杂物被跟踪：_patch_*.py、__pycache__/、*.pyc、.urx-hist-* 被跟踪即红。
 

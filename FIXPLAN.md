@@ -1,6 +1,6 @@
-# BSHSQ 修复台账（2026-09-15 完成）
+# PhysArena 修复台账（2026-09-15 完成）
 
-入口：`C:\Users\lbx13\WorkBuddy\2026-09-15-07-43-53\bshsq` → 拷贝到 `D:\开发\bshsq`。
+入口：`C:\Users\lbx13\WorkBuddy\2026-09-15-07-43-53\physarena` → 拷贝到 `D:\开发\physarena`。
 三路静态审视（引擎适配器 31 项 / 场景库 44 项 / UI+自检 24 项）全部逐条处置；
 动态验证：自检矩阵 19 探针 × 9 引擎 **0 失败**，跑分 9 引擎 × 8 场景全部完成。
 
@@ -53,7 +53,7 @@
 ## 复现命令
 
 ```bash
-cd /d/开发/bshsq
+cd /d/开发/physarena
 npm run typecheck && npm run build          # 静态与构建
 npm run build:vxl                            # 需要 Rust + wasm32 目标
 npm run preview &                            # 4173

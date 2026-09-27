@@ -9,9 +9,9 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 1200, height: 700 } });
 page.on('console', (m) => { if (m.type() === 'error') console.log('  ! ' + m.text()); });
 await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
-await page.waitForFunction(() => !!window.__bshsq, null, { timeout: 60000 });
+await page.waitForFunction(() => !!window.__physarena, null, { timeout: 60000 });
 const results = await page.evaluate(
-  ({ eng, sc, bodies }) => window.__bshsq.runBenchCells([eng], [sc], bodies),
+  ({ eng, sc, bodies }) => window.__physarena.runBenchCells([eng], [sc], bodies),
   { eng, sc, bodies },
 );
 writeFileSync('out/probe.json', JSON.stringify(results, null, 2));
