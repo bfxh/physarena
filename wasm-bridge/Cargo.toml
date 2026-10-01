@@ -13,10 +13,17 @@ description = "BSHSQ-Solver ↔ PhysArena wasm 桥：批量 ABI（独立于引�
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# 引擎门面 crate 的真名是 **vxl-phys**（lib 名 `vxl_phys`）——2026-09-30 修：
+# 此前依赖键被写成 `BSHSQ-Solver`、指向 `../../crates/BSHSQ-Solver`，是把品牌名直接
+# 查替换到依赖键上造成的断裂——该 crate 在 main 与 feat/solver-limits 两条线上都不存在，
+# 且路径少了一级（`../..` 从本文件解析到 D:\KF，落到不存在的 D:\KF\crates）。
+# 本桥 src/lib.rs 一直 `use vxl_phys::{World, CompoundChild, Joint…}`，故按真名接回。
+# ⚠️ 下面三行是 physarena ↔ 引擎之间唯一的承重耦合：引擎目录改名/搬家必须同时改这里
+#    （Cargo 的 path 依赖不展开环境变量，构建脚本里的校验救不了它）。
 [dependencies]
-BSHSQ-Solver = { path = "../..//crates/BSHSQ-Solver" }
-vxl-phys-core = { path = "../..//crates/vxl-phys-core" }
-vxl-phys-terrain = { path = "../..//crates/vxl-phys-terrain" }
+vxl-phys = { path = "../../BSHSQ/crates/vxl-phys" }
+vxl-phys-core = { path = "../../BSHSQ/crates/vxl-phys-core" }
+vxl-phys-terrain = { path = "../../BSHSQ/crates/vxl-phys-terrain" }
 
 [profile.release]
 opt-level = 3
