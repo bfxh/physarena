@@ -2,7 +2,9 @@
 
 入口：`C:\Users\lbx13\WorkBuddy\2026-09-15-07-43-53\physarena` → 拷贝到 `D:\开发\physarena`。
 三路静态审视（引擎适配器 31 项 / 场景库 44 项 / UI+自检 24 项）全部逐条处置；
-动态验证：自检矩阵 19 探针 × 9 引擎 **0 失败**，跑分 9 引擎 × 8 场景全部完成。
+动态验证（**当轮口径**）：19 探针 × 9 引擎 **0 失败**（`out/selftest-joints.json`），
+跑分 9 引擎 × 8 场景全部完成。**⚠️ 探针在 2026-09-21 扩到 21 项后这不再代表当前状态**，
+现行口径见 `README.md`「兼容性自检矩阵」一节（21 探针、10 格红，锚 `out/selftest-cleanup20261003.json`）。
 
 ## 状态总览
 
@@ -19,10 +21,13 @@
 - **自检矩阵（前）**：原版构建 `out/selftest-before.json` —— 8 引擎 0 失败，但
   `shape-trimesh` / `stability-ccd` 读静态体（永不可能失败）、`stability-energy`
   缺位置断言 ⇒ 一部分"全绿"是假的。
-- **自检矩阵（后）**：`out/selftest-final.json` —— 9 引擎 0 失败；修好探针后抓出
-  的真实差异：PhysX CCD 实测不生效（隔离复现：场景+body 标志、4 MB scratch、
-  `ccdMaxPasses=4` 全开仍穿透 240 m/s 弹丸；15 m/s 对照正常）⇒ capability 改
-  `ccd:false`，矩阵如实降级；cannon/cannon-es 三角网与铰链限位缺失被如实标注。
+- **自检矩阵（后，19 探针当轮）**：`out/selftest.json` / `out/selftest-joints.json` ——
+  9 引擎 0 失败；修好探针后抓出的真实差异：PhysX CCD 实测不生效（隔离复现：场景+body
+  标志、4 MB scratch、`ccdMaxPasses=4` 全开仍穿透 240 m/s 弹丸；15 m/s 对照正常）⇒
+  capability 改 `ccd:false`，矩阵如实降级；cannon/cannon-es 三角网缺失被如实标注。
+  **⚠️ 勘误（2026-10-03）**：本节此前引用的 `out/selftest-final.json` **实测不是 0 失败**——
+  它是 21 探针版本、9 引擎合计 10 格红（与 `out/selftest-fixverify.json` 逐格相同）。
+  0 失败的那两份是 19 探针时代的快照。
 - **跑分（后）**：`out/bench-after.json` —— 9 引擎 × 8 场景；睡眠感知窗口生效
   （每个静止场景给出 `sleep_onset_step`）。8 场景平均 p50（ms）：
   PhysX 0.29 / Havok 0.35 / Oimo 0.56 / Jolt 0.63 / Rapier 0.72 / Crashcat 1.09 /
@@ -39,7 +44,7 @@
   （`arena-ccd-probe` / `arena-cyl-probe` / `arena-enum-probe` / `vxl-cone-probe`）。
 - `package.json`：`build:vxl`、`drive:selftest`、`drive:bench`。
 
-## 已知残留（如实记录，不影响"0 失败"）
+## 已知残留（如实记录）
 
 - **cannon-es 布娃娃群 356 ms/步**（触及 30 s 单格上限、样本不完整）：凸包胶囊
   × 12 次迭代的病态窄相，属该引擎自身特性；跑分表已标注。
