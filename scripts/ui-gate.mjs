@@ -153,6 +153,60 @@ const compareTable = () => {
     check('bench mode renders config', bench.pane && bench.checks > 0, `checks=${bench.checks}`);
     await bp.close();
 
+    // ---- 3b. functional depth: every engine steps, every renderer draws ----
+    // The list rendering a card is not proof the part works: an engine can be
+    // listed but fail to boot, a renderer can mount and paint nothing. Drive
+    // each one through the app's automation hooks and assert real behaviour.
+    const fp = await newPage(browser);
+    await fp.setViewportSize({ width: 1440, height: 900 });
+    // preserveBuffer=1 turns on preserveDrawingBuffer so the WebGL backends can
+    // be read back with drawImage; without it a composited WebGL frame reads as
+    // blank and every GL renderer would look like it drew nothing.
+    await fp.goto(`${BASE}?mode=sandbox&preserveBuffer=1`, { waitUntil: 'load' });
+    await waitFor(fp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(1500);
+
+    // engines: select each, require the sim to actually step
+    const engineIds = await fp.evaluate(() => window.__physarena.engineIds());
+    for (const id of engineIds) {
+      try { await fp.evaluate((e) => window.__physarena.selectEngine(e), id); } catch { /* handled by the check */ }
+      const ran = await waitFor(fp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 2), 45000);
+      check(`engine steps: ${id}`, ran);
+    }
+
+    // renderers: select each, sample the canvas for real pixels. A renderer the
+    // environment cannot run is reported via `unavailable` and skipped - but a
+    // runnable one that mounts and paints nothing is a failure.
+    const renderers = await fp.evaluate(() => window.__physarena.listRenderers().map((r) => ({ id: r.id, unavailable: r.unavailable })));
+    for (const r of renderers) {
+      if (r.unavailable) { check(`renderer draws: ${r.id}`, true, 'unavailable in this env (skipped)'); continue; }
+      let cur = null;
+      try { await fp.evaluate((x) => window.__physarena.selectRenderer(x), r.id); cur = await fp.evaluate(() => window.__physarena.currentRenderer()); } catch { /* treated as failure below */ }
+      if (cur !== r.id) { check(`renderer draws: ${r.id}`, false, 'selection did not take effect'); continue; }
+      await sleep(r.id === 'babylon' ? 5000 : 2600);
+      const s = await fp.evaluate(() => {
+        const el = document.querySelector('.pa-canvas');
+        if (!el) return { drawn: false, why: 'no .pa-canvas' };
+        if (el.tagName !== 'CANVAS') return { drawn: el.querySelectorAll('*').length > 2, why: 'dom-nodes' };
+        const t = document.createElement('canvas'); t.width = el.width; t.height = el.height;
+        const g = t.getContext('2d'); g.drawImage(el, 0, 0);
+        const d = g.getImageData(0, 0, t.width, t.height).data;
+        const uniq = new Set();
+        for (let i = 0; i < d.length; i += 64) uniq.add(`${d[i] >> 4}.${d[i + 1] >> 4}.${d[i + 2] >> 4}`);
+        return { drawn: uniq.size > 3, distinct: uniq.size };
+      });
+      check(`renderer draws: ${r.id}`, s.drawn, s.why || `distinct=${s.distinct}`);
+    }
+
+    // scenarios: a few build and simulate without producing NaN
+    const scenIds = await fp.evaluate(() => window.__physarena.scenarioIds());
+    for (const sid of scenIds.slice(0, 5)) {
+      try { await fp.evaluate((x) => window.__physarena.selectScenario(x), sid); } catch { /* handled */ }
+      const ok = await waitFor(fp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 1 && (x.nonFinite ?? 0) === 0), 20000);
+      check(`scenario runs: ${sid}`, ok);
+    }
+    await fp.close();
+
     // ---- 4. layout: no page overflow, no header control clipped ---------
     for (const w of WIDTHS) {
       const lp = await newPage(browser);
@@ -181,6 +235,27 @@ const compareTable = () => {
       check(`layout @${w}: header controls not mangled`, m.tallCtrls === 0, `tall=${m.tallCtrls}`);
       await lp.close();
     }
+
+    // ---- 5. determinism: the same cell run twice must hash identically ----
+    // A benchmark lab whose numbers move between identical runs is measuring
+    // noise. stateHash is the lab's own fingerprint of the final world state.
+    const dp = await newPage(browser);
+    await dp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(dp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(1200);
+    const engineForBench = await dp.evaluate(() => window.__physarena.engineIds().find((e) => e === 'rapier3d') || window.__physarena.engineIds()[0]);
+    const scenForBench = await dp.evaluate(() => window.__physarena.scenarioIds()[0]);
+    const hashes = [];
+    let completed = false, benchErr = null;
+    for (let k = 0; k < 2; k++) {
+      const res = await dp.evaluate(([e, s]) => window.__physarena.runBenchCells([e], [s]), [engineForBench, scenForBench]);
+      const row = Array.isArray(res) ? res[0] : null;
+      hashes.push(row?.stateHash ?? '');
+      if (k === 0) { completed = !!row?.completed; benchErr = row?.error ?? null; }
+    }
+    check('bench cell completes without error', completed && !benchErr, benchErr ?? '');
+    check('bench is deterministic (same stateHash across two runs)', hashes[0] !== '' && hashes[0] === hashes[1], `${hashes[0]} vs ${hashes[1]}`);
+    await dp.close();
   } finally {
     await browser.close();
     server.kill();

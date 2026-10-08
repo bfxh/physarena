@@ -1738,6 +1738,7 @@ export class App {
           return {
             id,
             bodies: states.length,
+            steps: sim?.steps ?? 0,
             nonFinite: bad,
             maxAbs: Number(maxAbs.toFixed(1)),
             minQuatNorm: states.length ? Number(minQuat.toFixed(4)) : null,
