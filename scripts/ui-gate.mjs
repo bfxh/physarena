@@ -30,7 +30,10 @@ const HEADFUL = process.env.UI_GATE_HEADFUL === '1';
 
 // Compare-table column order is defined in comparePanel(); keep in sync.
 const COL = { engine: 0, p50: 1, steps: 5, contacts: 7, memory: 8 };
-const WIDTHS = [1440, 1280, 1152, 1024];
+// Full range: ultrawide down to a phone. A fixed-width 3-column shell can
+// collapse the 1fr centre to zero on a narrow viewport, which hides the 3D
+// view entirely - the layout checks below assert the viewport stays visible.
+const WIDTHS = [2560, 1440, 1280, 1152, 1024, 768, 390];
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -249,16 +252,19 @@ const compareTable = () => {
         }).length;
         // A label wrapped one glyph per line becomes unusually tall for a control.
         const tall = ctrls.filter((b) => b.getBoundingClientRect().height > 48).length;
+        const stage = document.querySelector('.pa-stage');
         return {
           pageOverflowX: de.scrollWidth - de.clientWidth,
           hiddenCtrls: hidden,
           tallCtrls: tall,
           ctrls: ctrls.length,
+          stageW: Math.round(stage?.getBoundingClientRect().width || 0),
         };
       });
       check(`layout @${w}: no horizontal page overflow`, m.pageOverflowX === 0, `overflowX=${m.pageOverflowX}`);
       check(`layout @${w}: no clipped header controls`, m.hiddenCtrls === 0, `hidden=${m.hiddenCtrls}/${m.ctrls}`);
       check(`layout @${w}: header controls not mangled`, m.tallCtrls === 0, `tall=${m.tallCtrls}`);
+      check(`layout @${w}: 3D viewport stays visible`, m.stageW >= 120, `stageW=${m.stageW}`);
       await lp.close();
     }
 
