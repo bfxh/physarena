@@ -60,7 +60,7 @@ export const meta: EngineMeta = {
     joints: ['fixed', 'revolute', 'prismatic', 'spherical', 'distance'],
     ccd: true,
     sensors: false,
-    memoryReport: false,
+    memoryReport: true,
   },
 };
 
@@ -347,7 +347,18 @@ class VxlEngine extends PhysicsEngineBase {
   }
 
   stats() {
-    return { bodyCount: this.bodyCount };
+    return {
+      bodyCount: this.bodyCount,
+      // The bridge's wasm linear memory is the engine's own heap - the same
+      // capacity figure havok/physx5 report, so it is honest to compare here.
+      // It is heap capacity, not bytes in use, and the build's heap size is
+      // fixed, so it does not change with the scene.
+      memoryBytes: this.ex?.memory?.buffer?.byteLength,
+      notes: {
+        memoryBytes:
+          'wasm 堆容量（memory.buffer.byteLength），不是使用量；该构建的堆尺寸固定，因此不随场景变化',
+      },
+    };
   }
 
   protected disposeWorld(): void {
