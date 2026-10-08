@@ -1,0 +1,40 @@
+# Quality gate for pull requests and non-main branches.
+#
+# deploy.yml already runs typecheck + build + the UI gate on main (nothing
+# deploys unverified), but until now a pull request only ran the naming gate -
+# so a UI regression could sit in a branch, merge, and only then turn main red
+# after the fact. This workflow runs the same quality gate *before* merge, so a
+# broken change is caught at the PR instead of after it lands.
+#
+# push to main is excluded on purpose: deploy.yml owns main and already performs
+# these steps, and duplicating them would build the site twice per commit.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Dependency hygiene: a shipping lab should not carry known advisories.
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
+      # Same headless UI regression gate as main - see scripts/ui-gate.mjs.
+      # Uses the runner's preinstalled Chrome; no browser download.
+      - name: UI 回归门（无头）
+        env:
+          UI_GATE_CHANNEL: chrome
+        run: node scripts/ui-gate.mjs

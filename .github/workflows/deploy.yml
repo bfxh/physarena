@@ -36,6 +36,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Dependency hygiene before anything ships.
+      - run: npm audit --audit-level=high
       # Type gate first: a type error must never reach the bundler.
       - run: npm run typecheck
       - run: npm run build

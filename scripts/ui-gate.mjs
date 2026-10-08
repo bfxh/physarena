@@ -123,7 +123,37 @@ const compareTable = () => {
     check('no console/page errors during compare', bootErrs.length === 0, bootErrs.slice(0, 3).join(' | '));
     await page.close();
 
-    // ---- 2. layout: no page overflow, no header control clipped ---------
+    // ---- 2. inventory: loadRenderers/loadRegistry DROP a module whose
+    // dynamic import rejects, so a broken module silently disappears from the
+    // list - indistinguishable from "some entries are missing". Guard the floor.
+    const ip = await newPage(browser);
+    await ip.setViewportSize({ width: 1440, height: 900 });
+    await ip.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(ip, () => !!document.querySelector('.pa-shell'), 30000);
+    await sleep(2000);
+    const inv = await ip.evaluate(() => ({
+      engines: document.querySelectorAll('.pa-panel-left .pa-engine').length,
+      renderers: document.querySelectorAll('.pa-panel-right .pa-engine').length,
+      scenarios: document.querySelectorAll('.pa-scenario').length,
+    }));
+    check('engine list populated', inv.engines >= 9, `engines=${inv.engines}`);
+    check('renderer list populated', inv.renderers >= 10, `renderers=${inv.renderers}`);
+    check('scenario list populated', inv.scenarios >= 70, `scenarios=${inv.scenarios}`);
+    await ip.close();
+
+    // ---- 3. bench mode renders its config pane
+    const bp = await newPage(browser);
+    await bp.goto(`${BASE}?mode=bench`, { waitUntil: 'load' });
+    await waitFor(bp, () => !!document.querySelector('.pa-bench'), 30000);
+    await sleep(1500);
+    const bench = await bp.evaluate(() => ({
+      pane: !!document.querySelector('.pa-bench'),
+      checks: document.querySelectorAll('.pa-bench .pa-check').length,
+    }));
+    check('bench mode renders config', bench.pane && bench.checks > 0, `checks=${bench.checks}`);
+    await bp.close();
+
+    // ---- 4. layout: no page overflow, no header control clipped ---------
     for (const w of WIDTHS) {
       const lp = await newPage(browser);
       await lp.setViewportSize({ width: w, height: 820 });
