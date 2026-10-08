@@ -1042,9 +1042,22 @@ export class App {
     if (this.mode !== 'compare' || this.compareIds.length < 2) return;
     const stage = this.els?.stage;
     if (!stage) return;
-    const old = stage.querySelector('.pa-slot-compare');
-    if (!old) return;
-    old.replaceWith(this.comparePanel());
+    // The panel is appended to the stage *wrap* (see layoutOverlay, where it
+    // moved out of the stage so it would stop covering the panes). Looking it
+    // up under `stage` therefore never matched, the replaceWith silently did
+    // nothing, and the table froze at whatever the numbers were when the panes
+    // were first laid out - 步数 0、p50 全是「—」，永远不更新。
+    const old = this.els.stageWrap.querySelector('.pa-slot-compare');
+    if (old) old.replaceWith(this.comparePanel());
+    // The per-pane labels carry the live p50 readout and live in the stage
+    // itself; refresh their <small> in the same tick so they do not read as
+    // frozen either.
+    const labels = stage.querySelectorAll('.pa-slot-label');
+    this.compareIds.forEach((id, i) => {
+      const s = this.slot(id);
+      const small = labels[i]?.querySelector('small');
+      if (small) small.textContent = s?.sim ? `${s.sim.timing.p50.toFixed(2)}ms` : '加载中';
+    });
   }
 
   /** Per-slot physics FPS, derived from the same window the HUD uses. */
