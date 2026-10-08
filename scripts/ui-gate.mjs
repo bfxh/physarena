@@ -35,7 +35,7 @@ const CHANNEL = process.env.UI_GATE_CHANNEL || (process.platform === 'win32' ? '
 const HEADFUL = GPU_MODE || process.env.UI_GATE_HEADFUL === '1';
 
 // Compare-table column order is defined in comparePanel(); keep in sync.
-const COL = { engine: 0, p50: 1, steps: 5, contacts: 7, memory: 8 };
+const COL = { engine: 0, p50: 1, steps: 5, contacts: 7, memory: 8, rel: 9 };
 // Full range: ultrawide down to a phone. A fixed-width 3-column shell can
 // collapse the 1fr centre to zero on a narrow viewport, which hides the 3D
 // view entirely - the layout checks below assert the viewport stays visible.
@@ -122,6 +122,14 @@ const compareTable = () => {
       await sleep(4000);
       const s2 = stepsOf(await page.evaluate(compareTable));
       check('compare table is live (step count advances)', s2 > s1, `steps ${s1} -> ${s2}`);
+
+      // Display self-consistency: the "relative to fastest" column is derived
+      // from the p50 column - the fastest engine must read exactly 1.00x and no
+      // row may read below 1.00x (a nonsensical "faster than fastest"). This
+      // catches a column that renders stale or mis-scaled numbers.
+      const rel = (await page.evaluate(compareTable)).map((r) => parseFloat(String(r[COL.rel]).replace('×', ''))).filter((v) => !Number.isNaN(v));
+      check('compare: relative-to-fastest column is self-consistent', rel.length >= 2 && rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9),
+        `values=${JSON.stringify(rel)}`);
 
       // Metrics presence: at least one engine reports memory, one reports contacts.
       table = await page.evaluate(compareTable);
@@ -385,13 +393,19 @@ const compareTable = () => {
     check('bench matrix: every engine×scenario cell completes', cells.length === matrixEngines.length * matrixScens.length && badCells.length === 0,
       `${cells.length} cells; bad=${JSON.stringify(badCells.map((r) => `${r.engineId}/${r.scenarioId}:${r.error || (r.completed ? 'nohash' : 'incomplete')}`))}`);
 
-    // Determinism must survive a reload, not just two runs in one session:
-    // a fresh page rebuilds every engine module and every world from scratch.
+    // Determinism must survive a reload, not just two runs in one session: a fresh
+    // page rebuilds every engine module and every world from scratch. Run the
+    // whole matrix again post-reload - stronger than a single cell.
+    const matrixHashes = cells.map((r) => r.stateHash);
     await dp.reload({ waitUntil: 'load' });
     await waitFor(dp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
     await sleep(1500);
-    const rehash = await dp.evaluate(([e, s]) => window.__physarena.runBenchCells([e], [s]).then((r) => r[0]?.stateHash ?? ''), [engineForBench, scenForBench]);
-    check('bench is deterministic across a page reload', rehash !== '' && rehash === hashes[0], `${hashes[0]} vs ${rehash}`);
+    const cells2 = await dp.evaluate(([es, ss]) => window.__physarena.runBenchCells(es, ss), [matrixEngines, matrixScens]);
+    const matrixHashes2 = (Array.isArray(cells2) ? cells2 : []).map((r) => r.stateHash);
+    const sameMatrix = matrixHashes.length === matrixHashes2.length && matrixHashes.length > 0
+      && matrixHashes.every((h, i) => h === matrixHashes2[i]);
+    check('bench matrix is deterministic across a page reload', sameMatrix,
+      matrixHashes.map((h, i) => `${h}/${matrixHashes2[i]}`).join(' '));
     await dp.close();
 
     // ---- 6. interactions: the controls are actually wired ---------------
