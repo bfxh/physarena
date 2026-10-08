@@ -198,13 +198,39 @@ const compareTable = () => {
       check(`renderer draws: ${r.id}`, s.drawn, s.why || `distinct=${s.distinct}`);
     }
 
-    // scenarios: a few build and simulate without producing NaN
-    const scenIds = await fp.evaluate(() => window.__physarena.scenarioIds());
-    for (const sid of scenIds.slice(0, 5)) {
+    // scenarios: sample across groups (not just the first five) so a breakage
+    // confined to, say, the fluids or joints group cannot hide.
+    const scen = await fp.evaluate(() => window.__physarena.listScenarios()); // [{id,group}]
+    const byGroup = new Map();
+    for (const s of scen) {
+      if (!byGroup.has(s.group)) byGroup.set(s.group, []);
+      byGroup.get(s.group).push(s.id);
+    }
+    const sample = [];
+    for (const ids of byGroup.values()) sample.push(...ids.slice(0, 2));
+    const scenSample = sample.slice(0, 10);
+    for (const sid of scenSample) {
       try { await fp.evaluate((x) => window.__physarena.selectScenario(x), sid); } catch { /* handled */ }
       const ok = await waitFor(fp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 1 && (x.nonFinite ?? 0) === 0), 20000);
       check(`scenario runs: ${sid}`, ok);
     }
+
+    // resilience: rapid engine/scenario churn must not wedge the app or leak
+    // page errors. Real users click fast; a wedged loop is invisible to the
+    // per-feature checks above because each of those starts from a clean page.
+    const churn = await fp.evaluate(async () => {
+      const es = window.__physarena.engineIds();
+      const ss = window.__physarena.scenarioIds();
+      for (let i = 0; i < 6; i++) {
+        window.__physarena.selectEngine(es[i % es.length]);
+        window.__physarena.selectScenario(ss[i % ss.length]);
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      return true;
+    });
+    await sleep(2500);
+    const alive = await waitFor(fp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 2), 20000);
+    check('resilience: survives rapid engine/scenario churn', churn && alive);
     await fp.close();
 
     // ---- 4. layout: no page overflow, no header control clipped ---------
@@ -255,6 +281,18 @@ const compareTable = () => {
     }
     check('bench cell completes without error', completed && !benchErr, benchErr ?? '');
     check('bench is deterministic (same stateHash across two runs)', hashes[0] !== '' && hashes[0] === hashes[1], `${hashes[0]} vs ${hashes[1]}`);
+
+    // a real matrix, not one cell: every engine×scenario cell must run to
+    // completion with a real state hash. A per-cell failure here (an engine
+    // that cannot finish a scenario) is exactly the kind of defect the lab
+    // exists to surface - it must never ship silently.
+    const matrixEngines = await dp.evaluate(() => ['BSHSQ-Solver', 'rapier3d', 'jolt'].filter((e) => window.__physarena.engineIds().includes(e)));
+    const matrixScens = await dp.evaluate(() => window.__physarena.scenarioIds().slice(0, 2));
+    const mres = await dp.evaluate(([es, ss]) => window.__physarena.runBenchCells(es, ss), [matrixEngines, matrixScens]);
+    const cells = Array.isArray(mres) ? mres : [];
+    const badCells = cells.filter((r) => !r.completed || r.error || !r.stateHash);
+    check('bench matrix: every engine×scenario cell completes', cells.length === matrixEngines.length * matrixScens.length && badCells.length === 0,
+      `${cells.length} cells; bad=${JSON.stringify(badCells.map((r) => `${r.engineId}/${r.scenarioId}:${r.error || (r.completed ? 'nohash' : 'incomplete')}`))}`);
     await dp.close();
 
     // ---- 6. interactions: the controls are actually wired ---------------
@@ -300,12 +338,14 @@ const compareTable = () => {
     await waitFor(cp, () => document.querySelectorAll('.pa-slot-compare tbody tr').length >= 2, 30000);
     await sleep(2500);
     await cp.evaluate(() => window.__physarena.selectEngine('jolt'));
-    await sleep(3500);
+    await sleep(2500);
+    await cp.evaluate(() => window.__physarena.selectEngine('cannon-es'));
+    await sleep(3000);
     const mc = await cp.evaluate(() => ({
       rows: document.querySelectorAll('.pa-slot-compare tbody tr').length,
       labels: document.querySelectorAll('.pa-slot-label').length,
     }));
-    check('compare: 3 engines render 3 rows + 3 panes', mc.rows === 3 && mc.labels === 3, JSON.stringify(mc));
+    check('compare: 4 engines render 4 rows + 4 panes (max-pane path)', mc.rows === 4 && mc.labels === 4, JSON.stringify(mc));
     await cp.close();
     await tp.close();
   } finally {
