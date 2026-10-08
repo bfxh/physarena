@@ -316,6 +316,14 @@ const compareTable = () => {
     const badCells = cells.filter((r) => !r.completed || r.error || !r.stateHash);
     check('bench matrix: every engine×scenario cell completes', cells.length === matrixEngines.length * matrixScens.length && badCells.length === 0,
       `${cells.length} cells; bad=${JSON.stringify(badCells.map((r) => `${r.engineId}/${r.scenarioId}:${r.error || (r.completed ? 'nohash' : 'incomplete')}`))}`);
+
+    // Determinism must survive a reload, not just two runs in one session:
+    // a fresh page rebuilds every engine module and every world from scratch.
+    await dp.reload({ waitUntil: 'load' });
+    await waitFor(dp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(1500);
+    const rehash = await dp.evaluate(([e, s]) => window.__physarena.runBenchCells([e], [s]).then((r) => r[0]?.stateHash ?? ''), [engineForBench, scenForBench]);
+    check('bench is deterministic across a page reload', rehash !== '' && rehash === hashes[0], `${hashes[0]} vs ${rehash}`);
     await dp.close();
 
     // ---- 6. interactions: the controls are actually wired ---------------
@@ -354,6 +362,34 @@ const compareTable = () => {
     check('left panel collapses to a rail', lc.cls && lc.rail, JSON.stringify(lc));
     await tp.evaluate(() => { const b = document.querySelector('.pa-collapse-left'); if (b) b.click(); });
     await sleep(300);
+
+    // 'r' rebuilds the world - the reset path no other check exercises.
+    const preReset = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? 0);
+    await tp.keyboard.press('r');
+    let resetOk = false, postReset = -1;
+    for (let i = 0; i < 16; i++) {
+      postReset = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? -1);
+      if (postReset < preReset) { resetOk = true; break; }
+      await sleep(300);
+    }
+    check('shortcut: r resets the world', preReset > 0 && resetOk, `${preReset} -> ${postReset}`);
+
+    // the bodies slider rebuilds the scene with the new count
+    const bodiesBefore = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.bodies ?? 0);
+    await tp.evaluate(() => {
+      const r = [...document.querySelectorAll('.pa-header .pa-controls input[type=range]')][0];
+      if (!r) return;
+      r.value = String(Math.max(8, Math.round(Number(r.value) / 2)));
+      r.dispatchEvent(new Event('input', { bubbles: true }));
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    let bodiesNow = -1, rebuilt = false;
+    for (let i = 0; i < 20; i++) {
+      bodiesNow = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.bodies ?? -1);
+      if (bodiesNow > 0 && bodiesNow < bodiesBefore) { rebuilt = true; break; }
+      await sleep(400);
+    }
+    check('slider: changing bodies rebuilds the scene', bodiesBefore > 0 && rebuilt, `${bodiesBefore} -> ${bodiesNow}`);
 
     // a 3-engine compare exercises the N-pane layout, not the 2-pane default
     const cp = await newPage(browser);
