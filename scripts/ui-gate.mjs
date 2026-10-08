@@ -588,6 +588,44 @@ const compareTable = () => {
       check('import: imported scenario simulates', sims);
     }
     await imp.close();
+
+    // ---- 9. shareable URL round-trip + bounded soak ---------------------
+    // A shared/reloaded URL must restore what its hash claims (the hash is the
+    // fallback when there is no query string).
+    const hp2 = await newPage(browser);
+    await hp2.goto(BASE, { waitUntil: 'load' });
+    await waitFor(hp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(1500);
+    await hp2.evaluate(() => window.__physarena.selectEngine('jolt'));
+    await sleep(2500);
+    const hash = await hp2.evaluate(() => location.hash);
+    await hp2.reload({ waitUntil: 'load' });
+    await waitFor(hp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    const restored = await waitFor(hp2, () => window.__physarena.simStateSummary().some((x) => x.id === 'jolt'), 20000);
+    check('share URL: hash round-trip restores the engine', /engine=jolt/.test(hash) && restored, `hash=${hash}`);
+    await hp2.close();
+
+    // Soak: a benchmark session runs for minutes. Over a bounded window the
+    // step counter must keep advancing (no wedge) and renderer resources must
+    // not grow per-frame (leak).
+    const sp2 = await newPage(browser);
+    await sp2.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(sp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(2500);
+    const geo0 = await sp2.evaluate(() => window.__physarena.rendererStats()?.geometries ?? 0);
+    let monotone = true, lastStep = -1, errsDuringSoak = 0;
+    for (let i = 0; i < 4; i++) {
+      await sleep(5000);
+      const st = await sp2.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? 0);
+      if (st <= lastStep) monotone = false;
+      lastStep = st;
+    }
+    const geo1 = await sp2.evaluate(() => window.__physarena.rendererStats()?.geometries ?? 0);
+    errsDuringSoak = sp2.__errs.length;
+    check('soak: step counter never wedges over 20s', monotone && lastStep > 0, `lastStep=${lastStep}`);
+    check('soak: no renderer resource runaway (leak guard)', geo1 <= geo0 + 10, `geometries ${geo0} -> ${geo1}`);
+    check('soak: no errors during sustained run', errsDuringSoak === 0, sp2.__errs.slice(0, 2).join(' | '));
+    await sp2.close();
   } finally {
     await browser.close();
     server.kill();
