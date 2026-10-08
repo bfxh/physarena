@@ -389,6 +389,72 @@ const compareTable = () => {
       `per-engine=${JSON.stringify(rows.map((r) => r.n))}`);
     console.log(`      selftest pass/fail per engine: ${JSON.stringify(rows.map((r) => `${r.id}:${r.pass}/${r.fail}`))}`);
     await sp.close();
+
+    // ---- 8. stress: resize storm, boot race, model import ---------------
+    // Resizing while comparing recomputes the pane rects and the overlay. The
+    // table and pane labels must survive a storm of width changes.
+    const rp = await newPage(browser);
+    await rp.goto(`${BASE}?mode=compare`, { waitUntil: 'load' });
+    await waitFor(rp, () => document.querySelectorAll('.pa-slot-compare tbody tr').length >= 2, 30000);
+    await sleep(2000);
+    let resizeOk = true;
+    const resizeSeen = [];
+    for (const w of [900, 1300, 700, 1100, 640]) {
+      await rp.setViewportSize({ width: w, height: 820 });
+      await sleep(900);
+      const st = await rp.evaluate(() => ({
+        rows: document.querySelectorAll('.pa-slot-compare tbody tr').length,
+        labels: document.querySelectorAll('.pa-slot-label').length,
+      }));
+      resizeSeen.push(`${w}:${st.rows}r/${st.labels}l`);
+      if (st.rows < 2 || st.labels < 2) resizeOk = false;
+    }
+    check('stress: compare survives repeated resize', resizeOk, resizeSeen.join(' '));
+    await rp.close();
+
+    // Boot race: switch engine/scenario while a world is still booting (30ms
+    // gaps land mid-boot). The app must recover, and - unlike the gentler churn
+    // check - must not leak an uncaught exception.
+    const bc = await newPage(browser);
+    await bc.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(bc, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bc.evaluate(async () => {
+      const es = window.__physarena.engineIds();
+      const ss = window.__physarena.scenarioIds();
+      for (let i = 0; i < 6; i++) {
+        window.__physarena.selectEngine(es[i % es.length]);
+        window.__physarena.selectScenario(ss[(i + 3) % ss.length]);
+        await new Promise((r) => setTimeout(r, 30));
+      }
+    });
+    const recovered = await waitFor(bc, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 2), 30000);
+    check('stress: recovers from switching mid-boot', recovered);
+    check('stress: no uncaught errors during boot race', bc.__errs.length === 0, bc.__errs.slice(0, 3).join(' | '));
+    await bc.close();
+
+    // Model import: the drop path has no coverage anywhere. Feed a minimal valid
+    // OBJ (a tetrahedron - 4 vertices, so the hull has enough points) through a
+    // synthetic DataTransfer and assert it becomes a live, simulating scenario.
+    const obj = ['v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'v 0 0 1', 'f 1 2 3', 'f 1 2 4', 'f 1 3 4', 'f 2 3 4'].join('\n');
+    const imp = await newPage(browser);
+    await imp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(imp, () => !!(window.__physarena && document.querySelector('.pa-stage')), 30000);
+    await imp.evaluate((text) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([text], 'gate.obj', { type: 'text/plain' }));
+      document.querySelector('.pa-stage').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, obj);
+    let imported = false;
+    for (let i = 0; i < 24; i++) {
+      if (await imp.evaluate(() => window.__physarena.scenarioIds().some((id) => id.startsWith('import:')))) { imported = true; break; }
+      await sleep(500);
+    }
+    check('import: model drop creates an imported scenario', imported);
+    if (imported) {
+      const sims = await waitFor(imp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 1), 25000);
+      check('import: imported scenario simulates', sims);
+    }
+    await imp.close();
   } finally {
     await browser.close();
     server.kill();
