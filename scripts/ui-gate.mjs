@@ -168,6 +168,36 @@ const compareTable = () => {
       checks: document.querySelectorAll('.pa-bench .pa-check').length,
     }));
     check('bench mode renders config', bench.pane && bench.checks > 0, `checks=${bench.checks}`);
+
+    // The bench *logic* is covered by the matrix/determinism checks, but the
+    // results TABLE was never exercised - the hook fills benchResults without
+    // rendering. Scope the config down to one engine x one scenario so the real
+    // start button runs fast, then assert the table actually appears.
+    await bp.evaluate(() => {
+      const secs = [...document.querySelectorAll('#pa-bench-cfg .pa-section')];
+      const keepFirst = (sec) => {
+        [...sec.querySelectorAll('input[type=checkbox]')].forEach((b, i) => {
+          const want = i === 0;
+          if (b.checked !== want) { b.checked = want; b.dispatchEvent(new Event('change', { bubbles: true })); }
+        });
+      };
+      if (secs[0]) keepFirst(secs[0]);
+      if (secs[1]) keepFirst(secs[1]);
+      const btn = [...document.querySelectorAll('#pa-bench-cfg button')].find((x) => /开始跑分/.test(x.textContent || ''));
+      if (btn) btn.click();
+    });
+    let benchTable = false, benchRows = 0;
+    for (let i = 0; i < 90; i++) {
+      const r = await bp.evaluate(() => {
+        const t = document.querySelector('.pa-bench-main table');
+        return { has: !!t, rows: t ? t.querySelectorAll('tbody tr').length : 0 };
+      });
+      if (r.has && r.rows > 0) { benchTable = true; benchRows = r.rows; break; }
+      await sleep(1000);
+    }
+    check('bench: start button produces a rendered results table', benchTable, `rows=${benchRows}`);
+    const csvBtn = await bp.evaluate(() => !!([...document.querySelectorAll('#pa-bench-cfg button')].find((x) => /导出 CSV/.test(x.textContent || ''))));
+    check('bench: export CSV button appears after a run', csvBtn);
     await bp.close();
 
     // ---- 3b. functional depth: every engine steps, every renderer draws ----
