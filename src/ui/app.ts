@@ -558,8 +558,7 @@ export class App {
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       if (e.code === 'Space') {
         e.preventDefault();
-        this.paused = !this.paused;
-        this.renderControls();
+        this.setPaused(!this.paused);
       } else if (e.key === 'r' || e.key === 'R') {
         void this.rebuildScene();
       } else if (e.key === 'ArrowRight') {
@@ -732,6 +731,24 @@ export class App {
   private async rebuildScene(): Promise<void> {
     for (const s of this.slots.values()) s.sceneKey = '';
     await this.activateForMode();
+  }
+
+  /**
+   * Pause belongs to the simulation, not just the toolbar.
+   *
+   * `Simulation.advance` short-circuits on its *own* `paused` flag, and that
+   * flag was only synced to the app-level one while a world was being built.
+   * Toggling the toolbar therefore left already-running sims stepping: the
+   * button read "continue" while the world kept moving. Push the flag to every
+   * live sim so the two can never drift apart.
+   */
+  private setPaused(v: boolean): void {
+    this.paused = v;
+    for (const id of this.activeIds()) {
+      const sim = this.slot(id)?.sim;
+      if (sim) sim.paused = v;
+    }
+    this.renderControls();
   }
 
   private stepOnce(): void {
@@ -1470,7 +1487,7 @@ export class App {
     const el = clear(this.els.controls);
     const s = this.slot(this.activeIds()[0] ?? '');
     el.append(
-      h('button', { class: 'pa-btn primary', text: this.paused ? '▶ 继续' : '❚❚ 暂停', onclick: () => { this.paused = !this.paused; this.renderControls(); } }),
+      h('button', { class: 'pa-btn primary', text: this.paused ? '▶ 继续' : '❚❚ 暂停', onclick: () => this.setPaused(!this.paused) }),
       h('button', { class: 'pa-btn', text: '▸ 单步', onclick: () => this.stepOnce() }),
       h('button', { class: 'pa-btn', text: '↺ 重置', onclick: () => void this.rebuildScene() }),
       h(
