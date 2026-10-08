@@ -256,6 +256,58 @@ const compareTable = () => {
     check('bench cell completes without error', completed && !benchErr, benchErr ?? '');
     check('bench is deterministic (same stateHash across two runs)', hashes[0] !== '' && hashes[0] === hashes[1], `${hashes[0]} vs ${hashes[1]}`);
     await dp.close();
+
+    // ---- 6. interactions: the controls are actually wired ---------------
+    // A rendered button proves nothing if its handler is dead. Drive the
+    // transport (pause / single-step), the collapsible panels, and a 3-engine
+    // compare (a different N-pane code path than the default 2).
+    const tp = await newPage(browser);
+    await tp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(tp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(2500);
+
+    const pauseClicked = await tp.evaluate(() => {
+      const b = [...document.querySelectorAll('.pa-header .pa-controls button')].find((x) => /暂停|继续/.test(x.textContent || ''));
+      if (!b) return false; b.click(); return true;
+    });
+    await sleep(400);
+    const st1 = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? 0);
+    await sleep(1500);
+    const st2 = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? 0);
+    check('transport: pause freezes stepping', pauseClicked && st1 === st2 && st1 > 0, `steps ${st1} -> ${st2}`);
+    await tp.evaluate(() => {
+      const b = [...document.querySelectorAll('.pa-header .pa-controls button')].find((x) => /单步/.test(x.textContent || ''));
+      if (b) b.click();
+    });
+    await sleep(500);
+    const st3 = await tp.evaluate(() => window.__physarena.simStateSummary()[0]?.steps ?? 0);
+    check('transport: single-step advances by exactly 1', st3 === st2 + 1, `${st2} -> ${st3}`);
+
+    // collapsible panels keep a usable rail instead of vanishing
+    await tp.evaluate(() => { const b = document.querySelector('.pa-collapse-left'); if (b) b.click(); });
+    await sleep(400);
+    const lc = await tp.evaluate(() => ({
+      cls: !!document.querySelector('.pa-shell.left-collapsed'),
+      rail: !!document.querySelector('.pa-shell.left-collapsed .pa-rail'),
+    }));
+    check('left panel collapses to a rail', lc.cls && lc.rail, JSON.stringify(lc));
+    await tp.evaluate(() => { const b = document.querySelector('.pa-collapse-left'); if (b) b.click(); });
+    await sleep(300);
+
+    // a 3-engine compare exercises the N-pane layout, not the 2-pane default
+    const cp = await newPage(browser);
+    await cp.goto(`${BASE}?mode=compare`, { waitUntil: 'load' });
+    await waitFor(cp, () => document.querySelectorAll('.pa-slot-compare tbody tr').length >= 2, 30000);
+    await sleep(2500);
+    await cp.evaluate(() => window.__physarena.selectEngine('jolt'));
+    await sleep(3500);
+    const mc = await cp.evaluate(() => ({
+      rows: document.querySelectorAll('.pa-slot-compare tbody tr').length,
+      labels: document.querySelectorAll('.pa-slot-label').length,
+    }));
+    check('compare: 3 engines render 3 rows + 3 panes', mc.rows === 3 && mc.labels === 3, JSON.stringify(mc));
+    await cp.close();
+    await tp.close();
   } finally {
     await browser.close();
     server.kill();
