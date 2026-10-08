@@ -36,7 +36,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Type gate first: a type error must never reach the bundler.
+      - run: npm run typecheck
       - run: npm run build
+      # UI regression gate. A build that compiles is not a build that renders:
+      # the compare table freezing, a metrics column collapsing to "—", and
+      # the header controls being squeezed at narrow widths all shipped
+      # green builds before. This boots the real dist in a headless browser and
+      # fails the job (and therefore blocks deploy) if any invariant breaks.
+      # Uses the runner's preinstalled Chrome - no browser download.
+      - name: UI 回归门（无头）
+        env:
+          UI_GATE_CHANNEL: chrome
+        run: node scripts/ui-gate.mjs
       # enablement: true lets the action flip the repo's Pages source to
       # "GitHub Actions" on first deploy - without it, a fresh repository fails
       # here with "Get Pages site failed" because no Pages site exists yet.
