@@ -142,6 +142,20 @@ const compareTable = () => {
     check('engine list populated', inv.engines >= 9, `engines=${inv.engines}`);
     check('renderer list populated', inv.renderers >= 10, `renderers=${inv.renderers}`);
     check('scenario list populated', inv.scenarios >= 70, `scenarios=${inv.scenarios}`);
+
+    // Display completeness: the primary readouts must actually show values, not
+    // just exist. A panel that renders empty looks identical to a working one in
+    // a count-only check - only reading the text tells them apart.
+    await sleep(2500);
+    const hud1 = await ip.evaluate(() => window.__physarena.hudText());
+    await sleep(1600);
+    const hud2 = await ip.evaluate(() => window.__physarena.hudText());
+    check('HUD renders labelled rows with live values', /已跑步数/.test(hud1) && /\d/.test(hud1) && hud1 !== hud2, `len=${hud1.length} live=${hud1 !== hud2}`);
+    const insp = await ip.evaluate(() => {
+      const rows = [...document.querySelectorAll('.pa-panel-right .pa-metric')];
+      return { n: rows.length, empty: rows.filter((r) => !r.textContent || /(^|\s)—(\s|$)/.test(r.textContent.trim())).length };
+    });
+    check('inspector metric rows are populated', insp.n >= 5 && insp.empty === 0, `rows=${insp.n} empty=${insp.empty}`);
     await ip.close();
 
     // ---- 3. bench mode renders its config pane
@@ -441,6 +455,14 @@ const compareTable = () => {
     check('selftest: every engine yields probe verdicts', totalProbes > 0 && rows.every((r) => r.n > 0),
       `per-engine=${JSON.stringify(rows.map((r) => r.n))}`);
     console.log(`      selftest pass/fail per engine: ${JSON.stringify(rows.map((r) => `${r.id}:${r.pass}/${r.fail}`))}`);
+    // the self-test matrix must actually render in the bench pane, not just
+    // exist in the hook - this is the compatibility matrix a reader comes for.
+    await sleep(1200);
+    const matrix = await sp.evaluate(() => {
+      const tbl = document.querySelector('#pa-bench-main table, .pa-bench-main table');
+      return { hasTable: !!tbl, cells: tbl ? tbl.querySelectorAll('td').length : 0 };
+    });
+    check('selftest: compatibility matrix renders in the UI', matrix.hasTable && matrix.cells > 0, `cells=${matrix.cells}`);
     await sp.close();
 
     // ---- 8. stress: resize storm, boot race, model import ---------------
@@ -452,6 +474,10 @@ const compareTable = () => {
     await sleep(2000);
     let resizeOk = true;
     const resizeSeen = [];
+    // each pane label carries the live p50 readout - it is refreshed separately
+    // from the table, so it can go stale while the table looks fine.
+    const labelLive = await rp.evaluate(() => [...document.querySelectorAll('.pa-slot-label small')].map((s) => s.textContent || ''));
+    check('compare: pane labels show a live p50', labelLive.length >= 2 && labelLive.every((t) => /\d/.test(t)), JSON.stringify(labelLive));
     for (const w of [900, 1300, 700, 1100, 640]) {
       await rp.setViewportSize({ width: w, height: 820 });
       await sleep(900);
