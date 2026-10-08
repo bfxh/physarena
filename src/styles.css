@@ -490,6 +490,19 @@ table.pa-table td.slow { color: var(--danger); }
   table.pa-table th, table.pa-table td { padding: 6px 7px; }
 }
 
+/* Below ~700px the two fixed side panels (210+232) exceed the viewport, which
+   collapses the 1fr centre column to zero: the 3D view disappears entirely and
+   the page scrolls sideways. This is a desktop lab, so on a phone the panels
+   become the same rails the collapse button produces - the viewport always
+   keeps real estate, and the rails stay usable. */
+@media (max-width: 700px) {
+  .pa-shell { grid-template-columns: 46px minmax(0, 1fr) 46px; }
+  .pa-panel-left > *:not(.pa-rail):not(.pa-collapse),
+  .pa-panel-right > *:not(.pa-rail):not(.pa-collapse) { display: none; }
+  .pa-panel-left .pa-rail, .pa-panel-right .pa-rail { display: flex; }
+  .pa-field input[type="range"] { width: 84px; }
+}
+
 /* Engine name stays put while the wide compare table scrolls sideways, so a
    number is never orphaned from the row it belongs to. */
 .pa-slot-compare table.pa-table th:first-child,
