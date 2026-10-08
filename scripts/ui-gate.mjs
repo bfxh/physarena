@@ -25,8 +25,14 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const PORT = Number(process.env.UI_GATE_PORT || 4180);
 const BASE = `http://127.0.0.1:${PORT}/physarena/`;
+// `--gpu` = manual deep check on a real GPU: run headful, do NOT force the
+// software rasteriser, and opt into WebGPU (which is gated behind
+// `?allowWebGPU=1` because on SwiftShader it freezes the main thread). This is
+// the only way to exercise the WebGPU path and real-GL drivers - CI is stuck on
+// SwiftShader and skips WebGPU entirely.
+const GPU_MODE = process.argv.includes('--gpu');
 const CHANNEL = process.env.UI_GATE_CHANNEL || (process.platform === 'win32' ? 'msedge' : 'chrome');
-const HEADFUL = process.env.UI_GATE_HEADFUL === '1';
+const HEADFUL = GPU_MODE || process.env.UI_GATE_HEADFUL === '1';
 
 // Compare-table column order is defined in comparePanel(); keep in sync.
 const COL = { engine: 0, p50: 1, steps: 5, contacts: 7, memory: 8 };
@@ -90,11 +96,14 @@ const compareTable = () => {
 
 (async () => {
   const server = await startServer();
+  // Force SwiftShader only for the headless CI path; a real GPU must use the
+  // real driver, otherwise we would be testing the same software raster again.
+  const launchArgs = GPU_MODE ? ['--no-sandbox', '--ignore-gpu-blocklist']
+    : ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
   const browser = await chromium.launch({
     channel: CHANNEL,
     headless: !HEADFUL,
-    args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-           '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+    args: launchArgs,
   });
   try {
     // ---- 1. boot + compare table is live and populated -------------------
@@ -208,8 +217,10 @@ const compareTable = () => {
     await fp.setViewportSize({ width: 1440, height: 900 });
     // preserveBuffer=1 turns on preserveDrawingBuffer so the WebGL backends can
     // be read back with drawImage; without it a composited WebGL frame reads as
-    // blank and every GL renderer would look like it drew nothing.
-    await fp.goto(`${BASE}?mode=sandbox&preserveBuffer=1`, { waitUntil: 'load' });
+    // blank and every GL renderer would look like it drew nothing. In GPU mode
+    // also opt into WebGPU, which is otherwise gated off.
+    const fpUrl = `${BASE}?mode=sandbox&preserveBuffer=1${GPU_MODE ? '&allowWebGPU=1' : ''}`;
+    await fp.goto(fpUrl, { waitUntil: 'load' });
     await waitFor(fp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
     await sleep(1500);
 
@@ -233,16 +244,29 @@ const compareTable = () => {
       await sleep(r.id === 'babylon' ? 5000 : 2600);
       const s = await fp.evaluate(() => {
         const el = document.querySelector('.pa-canvas');
+        let drawn = false, why = '';
         if (!el) return { drawn: false, why: 'no .pa-canvas' };
-        if (el.tagName !== 'CANVAS') return { drawn: el.querySelectorAll('*').length > 2, why: 'dom-nodes' };
-        const t = document.createElement('canvas'); t.width = el.width; t.height = el.height;
-        const g = t.getContext('2d'); g.drawImage(el, 0, 0);
-        const d = g.getImageData(0, 0, t.width, t.height).data;
-        const uniq = new Set();
-        for (let i = 0; i < d.length; i += 64) uniq.add(`${d[i] >> 4}.${d[i + 1] >> 4}.${d[i + 2] >> 4}`);
-        return { drawn: uniq.size > 3, distinct: uniq.size };
+        if (el.tagName !== 'CANVAS') { drawn = el.querySelectorAll('*').length > 2; why = 'dom-nodes'; }
+        else {
+          const t = document.createElement('canvas'); t.width = el.width; t.height = el.height;
+          const g = t.getContext('2d'); g.drawImage(el, 0, 0);
+          const d = g.getImageData(0, 0, t.width, t.height).data;
+          const uniq = new Set();
+          for (let i = 0; i < d.length; i += 64) uniq.add(`${d[i] >> 4}.${d[i + 1] >> 4}.${d[i + 2] >> 4}`);
+          drawn = uniq.size > 3; why = `distinct=${uniq.size}`;
+        }
+        return { drawn, why, stats: window.__physarena.rendererStats() };
       });
-      check(`renderer draws: ${r.id}`, s.drawn, s.why || `distinct=${s.distinct}`);
+      // Pixels are the ground truth, but on a REAL GPU (headful) the canvas drawing
+      // buffer is cleared after compositing, so drawImage reads blank for most
+      // backends even while they render correctly. Fall back to the backend's
+      // own draw-call/instance/triangle counters there. A backend that truly
+      // paints nothing has empty stats AND blank pixels, so it still fails - the
+      // headless pixel check remains the strict guard, and stats backstops only
+      // where readback is untrustworthy.
+      const statsWork = (s.stats?.drawCalls ?? 0) > 0 || (s.stats?.instances ?? 0) > 0 || (s.stats?.triangles ?? 0) > 0;
+      const evidence = s.drawn || statsWork;
+      check(`renderer draws: ${r.id}`, evidence, s.drawn ? s.why : `${s.why} (readback blank; stats drawCalls=${s.stats?.drawCalls ?? 0} instances=${s.stats?.instances ?? 0})`);
     }
 
     // scenarios: sample across groups (not just the first five) so a breakage

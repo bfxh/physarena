@@ -19,7 +19,8 @@
     "probe:jolt": "node scripts/probe-jolt-bodyid.mjs",
     "probe:jolt-heap": "node scripts/probe-jolt-clone-cycle.mjs",
     "verify:scenarios": "node scripts/verify-scenarios.mjs",
-    "gate": "node scripts/ui-gate.mjs"
+    "gate": "node scripts/ui-gate.mjs",
+    "gate:gpu": "node scripts/ui-gate.mjs --gpu"
   },
   "dependencies": {
     "@babylonjs/core": "^9.27.1",
