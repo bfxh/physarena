@@ -268,6 +268,23 @@ const compareTable = () => {
       await lp.close();
     }
 
+    // ---- 4b. short viewports: panes keep a usable height ----------------
+    // Width alone is not enough - a short window starves the 3D view because
+    // the (supplementary) compare table refuses to yield height. Load compare
+    // once, then sweep the height: the panes must never be squashed away.
+    const hp = await newPage(browser);
+    await hp.setViewportSize({ width: 1024, height: 820 });
+    await hp.goto(`${BASE}?mode=compare`, { waitUntil: 'load' });
+    await waitFor(hp, () => document.querySelectorAll('.pa-slot-compare tbody tr').length >= 2, 30000);
+    await sleep(2000);
+    for (const h of [820, 520, 380, 280]) {
+      await hp.setViewportSize({ width: 1024, height: h });
+      await sleep(1400);
+      const sh = await hp.evaluate(() => Math.round(document.querySelector('.pa-stage')?.getBoundingClientRect().height || 0));
+      check(`short viewport @1024x${h}: 3D view keeps usable height`, sh >= 100, `stageH=${sh}`);
+    }
+    await hp.close();
+
     // ---- 5. determinism: the same cell run twice must hash identically ----
     // A benchmark lab whose numbers move between identical runs is measuring
     // noise. stateHash is the lab's own fingerprint of the final world state.
