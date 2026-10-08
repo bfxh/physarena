@@ -383,7 +383,9 @@ table.pa-table td.slow { color: var(--danger); }
 .pa-scenario-bar .pa-scenario i { margin-left: 6px; }
 .pa-scenario-bar .pa-scenario.on { border-color: var(--accent); }
 
-.pa-stage-wrap .pa-stage { flex: 1; min-height: 0; }
+/* The panes are the point of the page: they get a floor so a short window
+   shrinks the (supplementary) compare table below, never the 3D view itself. */
+.pa-stage-wrap .pa-stage { flex: 1; min-height: 110px; }
 
 /* --------------------------------------------------------- collapsible */
 
@@ -450,7 +452,9 @@ table.pa-table td.slow { color: var(--danger); }
    viewport gives up the height instead. */
 .pa-stage-wrap .pa-slot-compare {
   position: static;
-  flex: none;
+  /* Shrinkable: on a short window this table must give up height before the
+     panes do. `flex: none` let a 34vh table starve the 3D view down to ~25px. */
+  flex: 0 1 auto;
   max-height: 34vh;
   overflow: auto;
   margin: 0;
