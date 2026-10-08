@@ -348,6 +348,41 @@ const compareTable = () => {
     check('compare: 4 engines render 4 rows + 4 panes (max-pane path)', mc.rows === 4 && mc.labels === 4, JSON.stringify(mc));
     await cp.close();
     await tp.close();
+
+    // ---- 7. full self-test matrix (every engine x every probe) ----------
+    // Probe failures are legitimate findings (PhysX has no convex hull, ...),
+    // so the gate asserts the *machinery*: it finishes, every engine boots or
+    // reports an explicit error, and every engine yields probe verdicts. It does
+    // not assert a pass rate - that is the lab's output, not a build invariant.
+    // Polled rather than awaited so a hung self-test fails the gate instead of
+    // hanging CI forever.
+    const sp = await newPage(browser);
+    await sp.goto(`${BASE}?mode=bench`, { waitUntil: 'load' });
+    await waitFor(sp, () => !!(window.__physarena && document.querySelector('.pa-bench')), 30000);
+    await sleep(1000);
+    await sp.evaluate(() => {
+      window.__stDone = false;
+      window.__physarena.runSelfTest().then(() => { window.__stDone = true; }, () => { window.__stDone = true; });
+    });
+    const mapRows = () => window.__physarena.getSelfTestResults().map((r) => ({
+      id: r.engineId, bootOk: r.bootOk, bootError: r.bootError ?? null,
+      n: (r.results || []).length, pass: r.passCount, fail: r.failCount,
+    }));
+    let rows = [];
+    for (let i = 0; i < 300; i++) {
+      const st = await sp.evaluate(() => ({ done: window.__stDone, n: window.__physarena.getSelfTestResults().length }));
+      if (st.done && st.n > 0) { rows = await sp.evaluate(mapRows); break; }
+      if (st.done && st.n === 0) break;
+      await sleep(1000);
+    }
+    const totalProbes = rows.reduce((a, r) => a + r.n, 0);
+    check('selftest: completes and produces a row for every engine', rows.length >= 9, `${rows.length} engine rows, ${totalProbes} probe verdicts`);
+    check('selftest: every engine boots or reports an explicit error', rows.length > 0 && rows.every((r) => r.bootOk || !!r.bootError),
+      JSON.stringify(rows.filter((r) => !r.bootOk && !r.bootError).map((r) => r.id)));
+    check('selftest: every engine yields probe verdicts', totalProbes > 0 && rows.every((r) => r.n > 0),
+      `per-engine=${JSON.stringify(rows.map((r) => r.n))}`);
+    console.log(`      selftest pass/fail per engine: ${JSON.stringify(rows.map((r) => `${r.id}:${r.pass}/${r.fail}`))}`);
+    await sp.close();
   } finally {
     await browser.close();
     server.kill();
