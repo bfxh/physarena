@@ -180,6 +180,28 @@ class Rapier3DEngine extends PhysicsEngineBase {
     this.world.step();
   }
 
+  /**
+   * 窄相现数：当前处于接触中的碰撞体对数。
+   *
+   * 走 `narrowPhase.contactPairsWith` 只读遍历，不挂碰撞事件、不改仿真负载
+   * —— 对跑分场景来说，给 UI 加一行读数不该给被测引擎的每一步计时添开销。
+   */
+  private countContactPairs(): number {
+    try {
+      const np = this.world?.narrowPhase;
+      const colliders = this.world?.colliders;
+      if (!np || !colliders) return 0;
+      let sides = 0;
+      for (const c of colliders.getAll()) {
+        np.contactPairsWith(c.handle, () => { sides += 1; });
+      }
+      // 每对从两侧各数一次
+      return Math.floor(sides / 2);
+    } catch {
+      return 0;
+    }
+  }
+
   protected syncStates(): void {
     for (let i = 0; i < this.rigidBodies.length; i++) {
       const rb = this.rigidBodies[i];
@@ -211,7 +233,13 @@ class Rapier3DEngine extends PhysicsEngineBase {
   }
 
   stats() {
-    return { bodyCount: this.rigidBodies.length };
+    return {
+      bodyCount: this.rigidBodies.length,
+      contactCount: this.countContactPairs(),
+      notes: {
+        contactCount: '窄相检测当前处于接触中的碰撞体对数（现数，不缓存）',
+      },
+    };
   }
 
   protected disposeWorld(): void {
