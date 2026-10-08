@@ -238,10 +238,19 @@ export function collectMetrics(src: MetricSources): MetricSection[] {
 
   // ----------------------------------------------------------- memory
   const jsHeap = readJsHeap();
+  // A capacity figure is not a usage figure: label each honestly so a frozen
+  // heap-size ceiling is never read as live usage.
+  const memKind = es?.memoryKind;
+  const memLabel = memKind === 'usage' ? '引擎实测占用' : memKind === 'capacity' ? '引擎堆容量' : '引擎内存';
+  const memDefaultHint = memKind === 'usage'
+    ? '引擎分配器自报的实时占用（每步变化）'
+    : memKind === 'capacity'
+      ? 'wasm 线性内存容量（上限），不是实际占用'
+      : '引擎自报的堆/内存使用量';
   const memoryRows: MetricRow[] = [
-    row('engine-memory', '引擎堆占用', es?.memoryBytes === undefined ? '—' : fmtBytes(es.memoryBytes), {
+    row('engine-memory', memLabel, es?.memoryBytes === undefined ? '—' : fmtBytes(es.memoryBytes), {
       raw: es?.memoryBytes,
-      hint: es?.notes?.memoryBytes ?? '引擎自报的堆/内存使用量',
+      hint: es?.notes?.memoryBytes ?? memDefaultHint,
       missing: es?.memoryBytes === undefined ? (es?.notes?.memoryBytes ?? MISSING_MEMORY) : undefined,
     }),
     row('render-bytes', '渲染缓冲', fmtBytes(rs?.bufferBytes), {

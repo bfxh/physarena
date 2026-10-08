@@ -332,6 +332,7 @@ class HavokEngine extends PhysicsEngineBase {
   stats(): EngineStats {
     return {
       bodyCount: this.bodyIds.length,
+      memoryKind: 'capacity',
       memoryBytes: this.hk?.HEAPU8?.byteLength,
       notes: {
         memoryBytes:

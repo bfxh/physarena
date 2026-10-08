@@ -169,6 +169,17 @@ export interface EngineMeta {
 export interface EngineStats {
   /** Bytes currently held by the wasm heap, when the engine exposes it. */
   memoryBytes?: number;
+  /**
+   * What `memoryBytes` actually measures.
+   *
+   * `usage`   - allocator-reported bytes actually in use (changes every step).
+   * `capacity`- the wasm linear-memory size (a fixed/grown ceiling; NOT usage).
+   *
+   * The distinction matters: a capacity figure is frozen for a fixed-size build
+   * and must never be ranked against a live-usage figure as if they were the
+   * same quantity.
+   */
+  memoryKind?: 'usage' | 'capacity';
   /** Number of native bodies actually allocated. */
   bodyCount?: number;
   /** Collision shapes retained by the engine (usually one per body). */

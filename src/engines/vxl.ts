@@ -353,6 +353,7 @@ class VxlEngine extends PhysicsEngineBase {
       // capacity figure havok/physx5 report, so it is honest to compare here.
       // It is heap capacity, not bytes in use, and the build's heap size is
       // fixed, so it does not change with the scene.
+      memoryKind: 'capacity' as const,
       memoryBytes: this.ex?.memory?.buffer?.byteLength,
       notes: {
         memoryBytes:

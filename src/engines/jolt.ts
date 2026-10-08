@@ -304,6 +304,7 @@ class JoltEngine extends PhysicsEngineBase {
     } catch { /* fall through */ }
     return {
       bodyCount: this.ids.length,
+      memoryKind: 'usage' as const,
       memoryBytes: used ?? ((this.J as any)?.HEAPU8?.byteLength ?? undefined),
     };
   }

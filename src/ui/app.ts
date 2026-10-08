@@ -917,6 +917,7 @@ export class App {
       dynamic: number | null;
       contacts: number | null;
       memory: number | null;
+      memoryKind: 'usage' | 'capacity' | null;
       fps: number | null;
       simTime: number | null;
       steps: number | null;
@@ -937,6 +938,7 @@ export class App {
         dynamic: sim ? sim.dynamicCount : null,
         contacts: st?.contactCount ?? null,
         memory: st?.memoryBytes ?? null,
+        memoryKind: st?.memoryKind ?? null,
         fps: sim ? this.slotFps(id) : null,
         simTime: sim ? sim.simTime : null,
         steps: sim ? sim.steps : null,
@@ -952,6 +954,10 @@ export class App {
       null,
     );
 
+    // Only meaningful if every present memory figure measures the same thing.
+    const memKinds = new Set(rows.map((r) => r.memoryKind).filter((k): k is 'usage' | 'capacity' => k !== null));
+    const memoryComparable = memKinds.size <= 1;
+
     type Col = { label: string; cell: (r: Row) => string; rank: (r: Row) => number | null; lowerWins: boolean };
     const cols: Col[] = [
       { label: '步 p50', cell: (r) => num(r.p50, 2, ' ms'), rank: (r) => r.p50, lowerWins: true },
@@ -961,7 +967,15 @@ export class App {
       { label: '步数', cell: (r) => int(r.steps), rank: () => null, lowerWins: false },
       { label: '动态刚体', cell: (r) => int(r.dynamic), rank: () => null, lowerWins: false },
       { label: '接触对', cell: (r) => int(r.contacts), rank: () => null, lowerWins: false },
-      { label: '内存', cell: (r) => (r.memory === null ? '—' : fmtBytes(r.memory)), rank: (r) => r.memory, lowerWins: true },
+      {
+        label: '内存',
+        // Mark the quantity so a frozen capacity is never mistaken for live
+        // usage, and only rank when every present figure measures the same
+        // thing (capacity-vs-usage comparison is meaningless).
+        cell: (r) => (r.memory === null ? '—' : `${fmtBytes(r.memory)}${r.memoryKind === 'capacity' ? ' ·容量' : r.memoryKind === 'usage' ? ' ·占用' : ''}`),
+        rank: (r) => (memoryComparable ? r.memory : null),
+        lowerWins: true,
+      },
       {
         label: '相对最快',
         cell: (r) => (r.p50 !== null && fastestP50 ? `${(r.p50 / fastestP50).toFixed(2)}×` : '—'),

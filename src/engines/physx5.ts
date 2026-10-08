@@ -411,6 +411,7 @@ class PhysX5Engine extends PhysicsEngineBase {
   stats(): EngineStats {
     return {
       bodyCount: this.actors.length,
+      memoryKind: 'capacity',
       memoryBytes: (this.P as any)?.HEAPU8?.byteLength ?? undefined,
       notes: {
         memoryBytes:
