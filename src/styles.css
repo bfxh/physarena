@@ -335,6 +335,10 @@ table.pa-table td.slow { color: var(--danger); }
   padding: 0;
   min-width: 0;
 }
+/* Each control keeps its natural width. Without this, a narrow header squeezes
+   the flex items and the labels wrap one glyph per line ("单步" -> 单/步). The
+   bar scrolls instead of mangling. */
+.pa-header .pa-controls > * { flex: 0 0 auto; }
 .pa-mode-btns { display: flex; gap: 6px; align-items: center; }
 .pa-mode-btns .pa-btn.on {
   background: var(--accent);
@@ -463,4 +467,35 @@ table.pa-table td.slow { color: var(--danger); }
   background: var(--line-strong);
   pointer-events: none;
   z-index: 2;
+}
+
+/* ---------------------------------------------------------------- narrow
+   The two side panels are fixed-width, so below ~1200px they leave the centre
+   column too little room: the compare table loses its right-hand columns and
+   the header controls get squeezed. Reclaim width from the panels first, and
+   only below ~1000px, where the centre would otherwise drop under ~380px. */
+@media (max-width: 1300px) {
+  /* Let the header grow and the controls wrap onto a second line instead of
+     scrolling off-screen, so every control stays visible without a scroll. */
+  .pa-shell { grid-template-rows: auto minmax(0, 1fr); }
+  .pa-header { flex-wrap: wrap; row-gap: 6px; align-content: center; padding: 8px 16px; }
+  .pa-header .pa-controls { flex-wrap: wrap; overflow: visible; gap: 8px; }
+}
+@media (max-width: 1200px) {
+  .pa-shell { grid-template-columns: 240px minmax(0, 1fr) 260px; }
+}
+@media (max-width: 1040px) {
+  .pa-shell { grid-template-columns: 210px minmax(0, 1fr) 232px; }
+  /* Tighter cells buy back the compare table's hidden right-hand columns. */
+  table.pa-table th, table.pa-table td { padding: 6px 7px; }
+}
+
+/* Engine name stays put while the wide compare table scrolls sideways, so a
+   number is never orphaned from the row it belongs to. */
+.pa-slot-compare table.pa-table th:first-child,
+.pa-slot-compare table.pa-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  z-index: 1;
 }
