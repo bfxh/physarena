@@ -85,7 +85,11 @@ jobs:
   # wrong while every earlier step passes. This opens the real URL and checks
   # the document and its entry bundle are actually served.
   verify-live:
-    needs: deploy
+    # needs BOTH: deploy for the URL, build for the freshly-built entry bundle
+    # name. A job can only read outputs of jobs listed in its needs - with only
+    # `deploy` here, ${{ needs.build.outputs.entry_asset }} silently resolved to
+    # empty and the propagation wait became a no-op.
+    needs: [build, deploy]
     runs-on: ubuntu-latest
     steps:
       - name: 线上冒烟（真实 URL）
@@ -94,6 +98,11 @@ jobs:
           EXPECTED: ${{ needs.build.outputs.entry_asset }}
         run: |
           set -euo pipefail
+          # Fail loudly if the build job's output did not arrive: an empty
+          # EXPECTED would turn `grep -q "$EXPECTED"` into a match-everything
+          # no-op and silently skip the propagation wait.
+          [ -n "$EXPECTED" ] || { echo "entry_asset output missing from build job"; exit 1; }
+          echo "waiting for entry asset: $EXPECTED"
           # SITE_URL already contains the /physarena base path; asset paths are
           # rooted at the host, so build URLs from the origin, not SITE_URL.
           origin=$(printf '%s' "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
