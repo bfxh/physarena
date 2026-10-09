@@ -13,6 +13,7 @@
     "build:vxl": "node scripts/build-vxl-wasm.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --port 4173",
+    "open": "vite preview --port 4173 --open --strictPort --host 127.0.0.1",
     "drive:selftest": "node scripts/arena-drive.mjs selftest",
     "drive:bench": "node scripts/arena-drive.mjs bench",
     "verify:renderers": "node scripts/verify-renderers.mjs --engines",
