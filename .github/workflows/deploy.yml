@@ -29,6 +29,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      entry_asset: ${{ steps.entry.outputs.name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,6 +59,11 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      # Record the freshly built entry bundle so verify-live can wait for THIS
+      # deployment to propagate instead of checking the previous one.
+      - name: 记录入口 bundle
+        id: entry
+        run: echo "name=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -84,24 +91,29 @@ jobs:
       - name: 线上冒烟（真实 URL）
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED: ${{ needs.build.outputs.entry_asset }}
         run: |
           set -euo pipefail
-          code=000
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /tmp/pa.html -w '%{http_code}' "${SITE_URL%/}/" || true)
-            [ "$code" = "200" ] && break
+          # SITE_URL already contains the /physarena base path; asset paths are
+          # rooted at the host, so build URLs from the origin, not SITE_URL.
+          origin=$(printf '%s' "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
+          # Wait for THIS deployment: Pages propagates asynchronously, so the
+          # document may still advertise the previous bundle for a while.
+          found=""
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /tmp/pa.html -w '%{http_code}' "$origin/physarena/" || true)
+            if [ "$code" = "200" ] && grep -q "$EXPECTED" /tmp/pa.html; then found=1; break; fi
             sleep 6
           done
-          echo "document HTTP $code"
+          echo "document HTTP $code, expected asset '$EXPECTED', propagated=${found:-0}"
           [ "$code" = "200" ]
-          grep -q '/physarena/assets/' /tmp/pa.html || { echo "base path missing /physarena/assets/"; exit 1; }
+          [ -n "$found" ]
           asset=$(grep -oE '/physarena/assets/index-[A-Za-z0-9_-]+\.js' /tmp/pa.html | head -1)
           echo "entry asset: $asset"
-          [ -n "$asset" ]
-          acode=$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL%/}$asset")
+          acode=$(curl -s -o /dev/null -w '%{http_code}' "$origin$asset")
           echo "asset HTTP $acode"
           [ "$acode" = "200" ]
-          # the self-test bundle the engines load must be served too
-          wcode=$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL%/}/physarena/vendor/vxl/vxl_phys_wasm.wasm" || true)
+          # the self-test wasm the engines load must be served too
+          wcode=$(curl -s -o /dev/null -w '%{http_code}' "$origin/physarena/vendor/vxl/vxl_phys_wasm.wasm")
           echo "vxl wasm HTTP $wcode"
           [ "$wcode" = "200" ]
