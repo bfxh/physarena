@@ -693,6 +693,42 @@ const compareTable = () => {
     check('soak: no renderer resource runaway (leak guard)', geo1 <= geo0 + 10, `geometries ${geo0} -> ${geo1}`);
     check('soak: no errors during sustained run', errsDuringSoak === 0, sp2.__errs.slice(0, 2).join(' | '));
     await sp2.close();
+
+    // ---- 10. BSHSQ scale twin-run + physical health ---------------------
+    // Method fused from the BSHSQ review suite (bshsq-bench): a heavy scene run
+    // twice must agree bit-for-bit (双跑对拍), and health is judged beyond "no
+    // NaN" — bounded positions (nothing flung to infinity), normalised
+    // quaternions, and a body count that actually moved (nothing stuck asleep).
+    // PhysArena previously only checked NaN, which a subtly broken solver passes.
+    const hp3 = await newPage(browser);
+    await hp3.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(hp3, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await hp3.evaluate(() => window.__physarena.selectEngine('BSHSQ-Solver'));
+    await sleep(2500);
+    await hp3.evaluate(() => window.__physarena.setBodies(600));
+    const scaled = await waitFor(hp3, () => {
+      const s = window.__physarena.simStateSummary()[0];
+      return s && s.bodies >= 500 && (s.steps ?? 0) > 5;
+    }, 30000);
+    const health = await hp3.evaluate(() => window.__physarena.simStateSummary()[0] ?? {});
+    check('BSHSQ scale: 600 bodies build and step', scaled, JSON.stringify(health));
+    check('BSHSQ health: no NaN at scale', (health.nonFinite ?? 0) === 0, `nonFinite=${health.nonFinite}`);
+    check('BSHSQ health: positions bounded (no explosion)', Number.isFinite(health.maxAbs) && health.maxAbs < 1e4, `maxAbs=${health.maxAbs}`);
+    check('BSHSQ health: quaternions normalised', health.minQuatNorm === null || Math.abs(health.minQuatNorm - 1) < 0.05, `minQuatNorm=${health.minQuatNorm}`);
+    await hp3.close();
+
+    // twin-run at the same scale: identical final state, twice
+    const dp2 = await newPage(browser);
+    await dp2.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
+    await waitFor(dp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await sleep(1500);
+    const twin = [];
+    for (let k = 0; k < 2; k++) {
+      const r = await dp2.evaluate(([e, s, b]) => window.__physarena.runBenchCells([e], [s], b).then((x) => x[0] ?? {}), ['BSHSQ-Solver', 'pyramid', 600]);
+      twin.push(r.stateHash ?? '');
+    }
+    check('BSHSQ scale: twin-run agrees bit-for-bit', twin[0] !== '' && twin[0] === twin[1], `${twin[0]} vs ${twin[1]}`);
+    await dp2.close();
   } finally {
     await browser.close();
     server?.kill();
