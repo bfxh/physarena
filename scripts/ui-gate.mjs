@@ -181,25 +181,29 @@ const compareTable = () => {
     await sleep(1500);
     const hardClip = await ip.evaluate(() => {
       const bad = [];
+      const cls = (el) => (el.className || '').toString().trim().split(/\s+/).slice(0, 2).join('.');
       for (const el of document.querySelectorAll('body *')) {
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') continue;
         if (!(el.textContent || '').trim()) continue;
-        if (el.clientHeight <= 8) continue;
-        if (el.scrollHeight <= el.clientHeight + 6) continue;         // not clipped
-        if (cs.overflowY !== 'hidden' && cs.overflowY !== 'clip') continue; // scrollable is fine
-        if (cs.textOverflow === 'ellipsis') continue;               // has ellipsis
+        if (cs.textOverflow === 'ellipsis') continue;
         const mask = cs.maskImage || cs.webkitMaskImage;
-        if (mask && mask !== 'none') continue;                      // has fade affordance
-        bad.push({
-          cls: (el.className || '').toString().trim().split(/\s+/).slice(0, 2).join('.'),
-          tag: el.tagName, ch: el.clientHeight, sh: el.scrollHeight,
-        });
+        if (mask && mask !== 'none') continue;   // fade affordance
+        // vertical clip: taller than the box, hard-hidden
+        if (el.clientHeight > 8 && el.scrollHeight > el.clientHeight + 6
+          && (cs.overflowY === 'hidden' || cs.overflowY === 'clip')) {
+          bad.push({ cls: cls(el), axis: 'v', ch: el.clientHeight, sh: el.scrollHeight });
+        }
+        // horizontal clip: wider than the box, hard-hidden (nowrap labels/names)
+        if (el.clientWidth > 8 && el.scrollWidth > el.clientWidth + 6
+          && (cs.overflowX === 'hidden' || cs.overflowX === 'clip')) {
+          bad.push({ cls: cls(el), axis: 'h', cw: el.clientWidth, sw: el.scrollWidth });
+        }
       }
       return bad;
     });
     check('no hard-clipped text (everything collapsed has an affordance)', hardClip.length === 0,
-      hardClip.length ? JSON.stringify(hardClip.slice(0, 5)) : '');
+      hardClip.length ? JSON.stringify(hardClip.slice(0, 6)) : '');
     await ip.close();
 
     // ---- 3. bench mode renders its config pane
