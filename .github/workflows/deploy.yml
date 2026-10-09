@@ -160,6 +160,36 @@ jobs:
           echo "wasm content-type: $ct"
           case "$ct" in application/wasm*) ;; *) echo "bad wasm MIME"; exit 1 ;; esac
 
+      # 部署字节级对账（线上 == 提交）：前面只验证了「能取到 + MIME 对」，没验证
+      # 「取到的就是提交的那份」。构建漏拷 / Pages 缓存旧版 / base path 错都会让部署字节
+      # 与提交脱节而 200+MIME 全绿——这正是「提交二进制 vs 源真值」同源缺口的部署侧延伸。
+      # 把线上字节拉下来和已提交文件 sha256 比对（带传播重试，避免 CDN 抖动误报）。
+      - uses: actions/checkout@v4
+      - name: 部署 vendored 二进制字节对账（线上 == 提交）
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          origin=$(printf '%s' "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
+          for p in \
+            public/vendor/vxl/vxl_phys_wasm.wasm \
+            public/vendor/havok/HavokPhysics.wasm \
+            public/vendor/physx/physx-js-webidl.wasm \
+            public/vendor/ammo/ammo.js ; do
+            want=$(sha256sum "$p" | cut -d' ' -f1)
+            url="$origin/physarena/${p#public/}"
+            ok=""; got=""; code=""
+            for i in $(seq 1 15); do
+              code=$(curl -s -o /tmp/live.bin -w '%{http_code}' "$url")
+              if [ "$code" = "200" ]; then
+                got=$(sha256sum /tmp/live.bin | cut -d' ' -f1)
+                [ "$want" = "$got" ] && { ok=1; break; }
+              fi
+              sleep 3
+            done
+            if [ -n "$ok" ]; then echo "OK  线上 $p == 提交 (sha256 ${got:0:12}…)"; else echo "FAIL 线上 $p 与提交不一致 (want ${want:0:12}… last code=$code last got=${got:0:12}…)"; exit 1; fi
+          done
+
   # The decisive check: run the entire UI gate against the PUBLISHED site in a
   # real browser. verify-live proves the bytes are served; this proves the app
   # actually runs there - JS executes under the Pages base path, every wasm
