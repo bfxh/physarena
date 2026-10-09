@@ -66,9 +66,12 @@ try {
       const tmp = '/tmp/bshsq-drift-probe';
       try {
         if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
-        if (sh('git', ['clone', '--filter=blob:none', '--no-checkout', '--depth', '1', remote, tmp])) {
-          // 确保钉死 rev 也在本地对象库（--depth 1 克隆可能没拉到老 commit）。
-          sh('git', ['fetch', remote, rev, '--depth', '1'], { cwd: tmp });
+        // blobless 全量克隆（只省文件内容、保留完整提交历史），这样 rev-list --count
+        // 才能算出「钉死 rev 到上游 HEAD」之间的真实落后 commit 数。--depth 1 会丢历史，
+        // 导致计数失败。nightly 一天一次、45min 预算，全量 blobless 克隆完全可接受。
+        if (sh('git', ['clone', '--filter=blob:none', '--no-checkout', remote, tmp])) {
+          // 保险：确保钉死 rev 在本地对象库（极端情况下在其它分支上）。
+          sh('git', ['fetch', remote, rev], { cwd: tmp });
           const isAnc = sh('git', ['merge-base', '--is-ancestor', rev, 'HEAD'], { cwd: tmp });
           reachable = isAnc === ''; // 退出码 0 => 是祖先
           const c = sh('git', ['rev-list', '--count', `${rev}..HEAD`], { cwd: tmp });
