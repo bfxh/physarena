@@ -139,3 +139,27 @@ jobs:
           ct=$(curl -s -o /dev/null -w '%{content_type}' "$origin/physarena/vendor/vxl/vxl_phys_wasm.wasm")
           echo "wasm content-type: $ct"
           case "$ct" in application/wasm*) ;; *) echo "bad wasm MIME"; exit 1 ;; esac
+
+  # The decisive check: run the entire UI gate against the PUBLISHED site in a
+  # real browser. verify-live proves the bytes are served; this proves the app
+  # actually runs there - JS executes under the Pages base path, every wasm
+  # instantiates, all nine engines boot and step, all renderers draw. None of
+  # that can be proven from a local preview, because the local build is served
+  # from the same origin the bundle was built for.
+  gate-live:
+    # deploy for the URL; verify-live so this only runs once the new build has
+    # actually propagated (otherwise it would test the previous deployment).
+    needs: [deploy, verify-live]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: UI 回归门（对线上部署站）
+        env:
+          UI_GATE_CHANNEL: chrome
+          UI_GATE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: node scripts/ui-gate.mjs
