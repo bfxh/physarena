@@ -36,6 +36,11 @@ jobs:
       - run: npm ci
       # Dependency hygiene: a shipping lab should not carry known advisories.
       - run: npm audit --audit-level=high
+      # vendor 漂移门：public/vendor 的引擎载荷（Havok/PhysX/Bullet wasm、ammo.js）
+      # 必须等于锁版本 node_modules 产物。必须在 npm run build 之前跑——prebuild 会重写
+      # vendor，跑晚了就测不出「提交滞后于锁版本」的脱节。
+      - name: vendor 漂移门（public/vendor == 锁版本引擎包产物）
+        run: node scripts/check-vendor-drift.mjs
       - run: npm run typecheck
       - run: npm run build
       # Same headless UI regression gate as main - see scripts/ui-gate.mjs.

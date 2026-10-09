@@ -41,6 +41,10 @@ jobs:
       - run: npm ci
       # Dependency hygiene before anything ships.
       - run: npm audit --audit-level=high
+      # vendor 漂移门：必须在 npm run build 之前（prebuild 会重写 vendor）。提交滞后于
+      # 锁版本的 vendored 引擎载荷在此拦下，避免部署一份与锁版本对不上的二进制。
+      - name: vendor 漂移门（public/vendor == 锁版本引擎包产物）
+        run: node scripts/check-vendor-drift.mjs
       # Type gate first: a type error must never reach the bundler.
       - run: npm run typecheck
       - run: npm run build

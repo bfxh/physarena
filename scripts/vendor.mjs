@@ -13,7 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const nm = join(root, 'node_modules');
 
 /** [sourceRelativeToNodeModules, destinationRelativeToPublic] */
-const TARGETS = [
+export const TARGETS = [
   // Havok ships the wasm next to the ESM glue; we serve it ourselves.
   ['@babylonjs/havok/lib/esm/HavokPhysics.wasm', 'vendor/havok/HavokPhysics.wasm'],
   // PhysX 5 - same story, non-inlined build.
@@ -24,22 +24,27 @@ const TARGETS = [
   ['ammojs-typed/ammo/ammo.js', 'vendor/ammo/ammo.js'],
 ];
 
-let copied = 0;
-let skipped = 0;
+// 仅当被直接执行（npm run vendor / node scripts/vendor.mjs）时才跑拷贝；
+// 被 check-vendor-drift.mjs 当作模块 import（只取 TARGETS）时不触发，否则会先
+// 把 public/vendor 覆写成锁版本、让漂移检查自检自愈、永远测不出提交滞后。
+if (process.argv[1] && process.argv[1].endsWith('vendor.mjs')) {
+  let copied = 0;
+  let skipped = 0;
 
-for (const [src, dest] of TARGETS) {
-  const from = join(nm, src);
-  const to = join(root, 'public', dest);
-  if (!existsSync(from)) {
-    console.warn(`[vendor] MISSING source: ${src}`);
-    skipped++;
-    continue;
+  for (const [src, dest] of TARGETS) {
+    const from = join(nm, src);
+    const to = join(root, 'public', dest);
+    if (!existsSync(from)) {
+      console.warn(`[vendor] MISSING source: ${src}`);
+      skipped++;
+      continue;
+    }
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(from, to);
+    const kb = (statSync(to).size / 1024).toFixed(0);
+    copied++;
+    console.log(`[vendor] ${src} -> public/${dest}  (${kb} KB)`);
   }
-  mkdirSync(dirname(to), { recursive: true });
-  copyFileSync(from, to);
-  const kb = (statSync(to).size / 1024).toFixed(0);
-  copied++;
-  console.log(`[vendor] ${src} -> public/${dest}  (${kb} KB)`);
-}
 
-console.log(`[vendor] done: ${copied} copied, ${skipped} skipped`);
+  console.log(`[vendor] done: ${copied} copied, ${skipped} skipped`);
+}
