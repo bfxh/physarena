@@ -1,0 +1,71 @@
+# Nightly verification of the deployed site.
+#
+# Every other workflow is push/PR-driven, which means nothing notices when the
+# code has not changed but the *site* has: a Pages configuration change, a CDN
+# or certificate problem, a dependency that rotted upstream, or a regression
+# that only appears after a deploy settles. This runs the same live checks
+# against the published URL on a timer - and never deploys, so it can only
+# report, never move the site.
+name: Nightly live check
+
+on:
+  schedule:
+    # 03:17 UTC daily. Off the hour on purpose: scheduled workflows are queued
+    # and GitHub drops the overflow, so everyone crowding :00 loses the run.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-live
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: 资产与MIME
+        env:
+          SITE_URL: https://bfxh.github.io/physarena
+        run: |
+          set -euo pipefail
+          origin=$(printf '%s' "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
+          code=$(curl -s -o /tmp/pa.html -w '%{http_code}' "$origin/physarena/")
+          echo "document HTTP $code"
+          [ "$code" = "200" ]
+          for p in \
+            /physarena/vendor/vxl/vxl_phys_wasm.wasm \
+            /physarena/vendor/havok/HavokPhysics.wasm \
+            /physarena/vendor/physx/physx-js-webidl.wasm \
+            /physarena/vendor/ammo/ammo.js ; do
+            c=$(curl -s -o /dev/null -w '%{http_code}' "$origin$p")
+            echo "$p -> $c"
+            [ "$c" = "200" ]
+          done
+          ct=$(curl -s -o /dev/null -w '%{content_type}' "$origin/physarena/vendor/vxl/vxl_phys_wasm.wasm")
+          echo "wasm content-type: $ct"
+          case "$ct" in application/wasm*) ;; *) echo "bad wasm MIME"; exit 1 ;; esac
+
+      - name: UI 回归门（对线上部署站）
+        env:
+          UI_GATE_CHANNEL: chrome
+          UI_GATE_URL: https://bfxh.github.io/physarena/
+        run: node scripts/ui-gate.mjs
+
+      - name: 上传门禁报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-gate-report-nightly
+          path: out/ui-gate-report.json
+          if-no-files-found: warn
