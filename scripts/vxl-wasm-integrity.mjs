@@ -3,7 +3,7 @@
 // 已提交的 public/vendor/vxl/vxl_phys_wasm.wasm 是静态二进制，历史上没有任何 CI
 // 任务从 BSHSQ Rust 源码重建或校验它——它能在无人察觉的情况下与源码脱节
 // （手改、不同步、换了 rev 没重建）。本门从 vxl_wasm.build.json 钉住的 BSHSQ rev
-// 重建 wasm，并实例化「已提交」与「重建」两份 wasm、跑同一固定场景，比较**物理输出**
+// 重建 wasm，并实例化「已提交」与「重建」两份 wasm、跑同一组多场景固定物理场景，比较**物理输出**
 // checksum；再比一次导出符号集合。源码相同 => 物理确定 => checksum/ABI 逐位一致；
 // 脱节 / 手改 / 换 rev 没重建 => 不一致 => 阻断发布。
 //
@@ -70,7 +70,7 @@ execFileSync('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown
 if (!existsSync(BUILT_WASM)) fail('构建未产出 target/.../vxl_phys_wasm.wasm');
 
 // 4) 行为比对：同场景物理输出 checksum + 导出符号集合，已提交 vs 重建。
-console.log('[vxl-integrity] 行为比对（固定场景，物理确定 => checksum/ABI 必须逐位一致）');
+console.log('[vxl-integrity] 行为比对（多场景固定物理场景，物理确定 => 组合 checksum/ABI 必须逐位一致）');
 const committedChk = await checksumWasm(COMMITTED_WASM);
 const builtChk = await checksumWasm(BUILT_WASM);
 console.log(`[vxl-integrity] 已提交  behavior ${committedChk}`);

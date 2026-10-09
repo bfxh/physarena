@@ -64,7 +64,7 @@ const SIDECAR_DEFAULTS = {
 export async function updateSidecar(wasmPath, engineDir, sidecarPath) {
   const bytes = readFileSync(wasmPath);
   const wasmSha = createHash('sha256').update(bytes).digest('hex');
-  const behaviorSha = await checksumWasm(wasmPath); // 实例化跑固定场景，门强制要求与 wasm 一致
+  const behaviorSha = await checksumWasm(wasmPath); // 实例化跑多场景固定物理场景，门强制要求与 wasm 一致
 
   const prev = existsSync(sidecarPath) ? JSON.parse(readFileSync(sidecarPath, 'utf8')) : {};
   const next = { ...SIDECAR_DEFAULTS, ...prev };
