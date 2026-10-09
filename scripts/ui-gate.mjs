@@ -172,7 +172,34 @@ const compareTable = () => {
       const rows = [...document.querySelectorAll('.pa-panel-right .pa-metric')];
       return { n: rows.length, empty: rows.filter((r) => !r.textContent || /(^|\s)—(\s|$)/.test(r.textContent.trim())).length };
     });
-    check('inspector metric rows are populated', insp.n >= 5 && insp.empty === 0, `rows=${insp.n} empty=${insp.empty}`);
+        check('inspector metric rows are populated', insp.n >= 5 && insp.empty === 0, `rows=${insp.n} empty=${insp.empty}`);
+
+    // "Only opened a little": text that is taller than its box, clipped with a
+    // hard `overflow:hidden`, and with NO affordance (no ellipsis, no fade mask)
+    // - so it just stops mid-sentence and looks broken. Deliberate collapses
+    // (like the engine blurb) carry a mask or ellipsis and are not flagged.
+    await sleep(1500);
+    const hardClip = await ip.evaluate(() => {
+      const bad = [];
+      for (const el of document.querySelectorAll('body *')) {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        if (!(el.textContent || '').trim()) continue;
+        if (el.clientHeight <= 8) continue;
+        if (el.scrollHeight <= el.clientHeight + 6) continue;         // not clipped
+        if (cs.overflowY !== 'hidden' && cs.overflowY !== 'clip') continue; // scrollable is fine
+        if (cs.textOverflow === 'ellipsis') continue;               // has ellipsis
+        const mask = cs.maskImage || cs.webkitMaskImage;
+        if (mask && mask !== 'none') continue;                      // has fade affordance
+        bad.push({
+          cls: (el.className || '').toString().trim().split(/\s+/).slice(0, 2).join('.'),
+          tag: el.tagName, ch: el.clientHeight, sh: el.scrollHeight,
+        });
+      }
+      return bad;
+    });
+    check('no hard-clipped text (everything collapsed has an affordance)', hardClip.length === 0,
+      hardClip.length ? JSON.stringify(hardClip.slice(0, 5)) : '');
     await ip.close();
 
     // ---- 3. bench mode renders its config pane
