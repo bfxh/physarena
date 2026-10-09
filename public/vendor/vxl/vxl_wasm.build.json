@@ -10,6 +10,7 @@
   "wasm_sha256": "ef2150bd2bf536d2ae5a07fb2e3d9349607bc0112926d94e5176e8d1379b080a",
   "wasm_size_bytes": 621500,
   "lockfile": "wasm-bridge/Cargo.lock",
-  "verification": "Rebuild from bshsq_rev with --locked and compare wasm_sha256. Mismatch => the committed wasm diverged from BSHSQ source.",
+  "behavior_sha256": "76926111a45c85152b72b1a5e9fbb95890af6d9e79e8dea91beee8eafa2e836e",
+  "verification": "Rebuild from bshsq_rev with --locked and compare behavior_sha256 (fixed-scenario physics checksum, host/path-independent) plus export-set drift. Mismatch => the committed wasm diverged from BSHSQ source. Byte-diff is intentionally NOT used: rustc embeds a path-derived crate-disambiguator into the wasm layout, so the same source is byte-unequal across build hosts/paths.",
   "generated_by": "scripts/build-vxl-wasm.mjs (npm run build:vxl)"
 }
