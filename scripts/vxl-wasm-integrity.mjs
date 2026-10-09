@@ -44,12 +44,12 @@ if (!existsSync(BSHSQ_SRC)) {
   console.log(`[vxl-integrity] clone ${bshsq_repo} -> ${BSHSQ_SRC}`);
   execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', url, BSHSQ_SRC], { stdio: 'inherit' });
 }
-const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: BSHSQ_SRC }).toString().trim();
-if (head !== bshsq_rev) {
-  console.log(`[vxl-integrity] 切到 ${bshsq_rev}（当前 ${head}）`);
-  execFileSync('git', ['fetch', 'origin', bshsq_rev, '--depth', '1'], { cwd: BSHSQ_SRC, stdio: 'inherit' });
-  execFileSync('git', ['checkout', '--detach', bshsq_rev], { cwd: BSHSQ_SRC, stdio: 'inherit' });
-}
+// 钉死到溯源文件记录的 rev，并 --force 检出工作树：
+// --no-checkout 克隆后工作树为空（只有 HEAD 指向 rev，crates/ 不存在），
+// 必须真正 checkout 才有源码；--force 同时覆盖任何脏/空状态。
+console.log(`[vxl-integrity] 取并检出 ${bshsq_repo} @ ${bshsq_rev}`);
+execFileSync('git', ['fetch', 'origin', bshsq_rev, '--depth', '1'], { cwd: BSHSQ_SRC, stdio: 'inherit' });
+execFileSync('git', ['checkout', '--detach', '--force', bshsq_rev], { cwd: BSHSQ_SRC, stdio: 'inherit' });
 
 // 2) 满足 wasm-bridge/Cargo.toml 的 path 依赖 ../../BSHSQ/crates。
 //    本地开发机 D:/KF/BSHSQ 已真实存在 => 跳过；CI 里该位置不存在 => 建符号链接。
