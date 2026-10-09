@@ -54,6 +54,25 @@ function check(name, ok, detail = '') {
 }
 
 /**
+ * 把「环境性」的瞬时网络错误从硬失败集合里剔除。
+ *
+ * 线上 Pages/CDN 偶发 5xx（502/503/504）是服务端暂不可用，不是产品缺陷；一次 CDN 抖动
+ * 不该红掉一份正确部署。真有某个 vendored 引擎 wasm 加载失败，下面的「engine steps /
+ * selftest / stress / soak」启动检查会抓到，所以这里忽略 5xx 资源加载错误是安全的。
+ * pageerror（JS 异常）与 4xx（资源确实缺失/配错）一律保留为硬失败。命中 5xx 时打 WARN
+ * 保留可见性，但不阻断。
+ */
+const TRANSIENT_NET = /Failed to load resource.*\b50[0-9]\b/;
+function filterHardErrs(errs, label = '') {
+  const hard = errs.filter((e) => !/favicon/i.test(e) && !TRANSIENT_NET.test(e));
+  const transient = errs.filter((e) => TRANSIENT_NET.test(e));
+  if (transient.length) {
+    console.log(`WARN  ${label} transient network 5xx ignored (environmental): ${transient.slice(0, 3).join(' | ')}`);
+  }
+  return hard;
+}
+
+/**
  * Machine-readable run report.
  *
  * The console log is for humans; CI needs the same verdicts as data so a
@@ -201,7 +220,7 @@ const compareTable = () => {
       check('contact-pair column numeric for >=1 engine', anyContacts, JSON.stringify(table.map((r) => r[COL.contacts])));
     }
 
-    const bootErrs = page.__errs.filter((e) => !/favicon/i.test(e));
+    const bootErrs = filterHardErrs(page.__errs, 'compare');
     check('no console/page errors during compare', bootErrs.length === 0, bootErrs.slice(0, 3).join(' | '));
     await page.close();
 
@@ -669,7 +688,8 @@ const compareTable = () => {
     });
     const recovered = await waitFor(bc, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 2), 30000);
     check('stress: recovers from switching mid-boot', recovered);
-    check('stress: no uncaught errors during boot race', bc.__errs.length === 0, bc.__errs.slice(0, 3).join(' | '));
+    const stressErrs = filterHardErrs(bc.__errs, 'stress');
+    check('stress: no uncaught errors during boot race', stressErrs.length === 0, stressErrs.slice(0, 3).join(' | '));
     await bc.close();
 
     // Model import: the drop path has no coverage anywhere. Feed a minimal valid
@@ -728,10 +748,11 @@ const compareTable = () => {
       lastStep = st;
     }
     const geo1 = await sp2.evaluate(() => window.__physarena.rendererStats()?.geometries ?? 0);
-    errsDuringSoak = sp2.__errs.length;
+    const soakErrs = filterHardErrs(sp2.__errs, 'soak');
+    errsDuringSoak = soakErrs.length;
     check('soak: step counter never wedges over 20s', monotone && lastStep > 0, `lastStep=${lastStep}`);
     check('soak: no renderer resource runaway (leak guard)', geo1 <= geo0 + 10, `geometries ${geo0} -> ${geo1}`);
-    check('soak: no errors during sustained run', errsDuringSoak === 0, sp2.__errs.slice(0, 2).join(' | '));
+    check('soak: no errors during sustained run', errsDuringSoak === 0, soakErrs.slice(0, 2).join(' | '));
     await sp2.close();
 
     // ---- 10. BSHSQ scale twin-run + physical health ---------------------
