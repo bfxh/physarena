@@ -122,7 +122,20 @@ jobs:
           acode=$(curl -s -o /dev/null -w '%{http_code}' "$origin$asset")
           echo "asset HTTP $acode"
           [ "$acode" = "200" ]
-          # the self-test wasm the engines load must be served too
-          wcode=$(curl -s -o /dev/null -w '%{http_code}' "$origin/physarena/vendor/vxl/vxl_phys_wasm.wasm")
-          echo "vxl wasm HTTP $wcode"
-          [ "$wcode" = "200" ]
+          # every vendored engine payload must be served - these are copied
+          # files, and a missed copy only shows up once someone loads that
+          # engine on the live site.
+          for p in \
+            /physarena/vendor/vxl/vxl_phys_wasm.wasm \
+            /physarena/vendor/havok/HavokPhysics.wasm \
+            /physarena/vendor/physx/physx-js-webidl.wasm \
+            /physarena/vendor/ammo/ammo.js ; do
+            c=$(curl -s -o /dev/null -w '%{http_code}' "$origin$p")
+            echo "$p -> $c"
+            [ "$c" = "200" ]
+          done
+          # a wasm served with the wrong MIME fails instantiateStreaming in a way
+          # no local preview would ever show
+          ct=$(curl -s -o /dev/null -w '%{content_type}' "$origin/physarena/vendor/vxl/vxl_phys_wasm.wasm")
+          echo "wasm content-type: $ct"
+          case "$ct" in application/wasm*) ;; *) echo "bad wasm MIME"; exit 1 ;; esac

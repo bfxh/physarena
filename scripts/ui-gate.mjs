@@ -24,7 +24,12 @@ import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const PORT = Number(process.env.UI_GATE_PORT || 4180);
-const BASE = `http://127.0.0.1:${PORT}/physarena/`;
+// Normally the gate drives a locally-served dist. UI_GATE_URL redirects it at
+// any already-hosted copy instead - e.g. the deployed Pages site, so the same
+// 100+ checks can be run against what users actually get.
+// When pointed at an external URL there is nothing to serve locally.
+const EXTERNAL = process.env.UI_GATE_URL || '';
+const BASE = EXTERNAL || `http://127.0.0.1:${PORT}/physarena/`;
 // `--gpu` = manual deep check on a real GPU: run headful, do NOT force the
 // software rasteriser, and opt into WebGPU (which is gated behind
 // `?allowWebGPU=1` because on SwiftShader it freezes the main thread). This is
@@ -95,7 +100,7 @@ const compareTable = () => {
 };
 
 (async () => {
-  const server = await startServer();
+  const server = EXTERNAL ? null : await startServer();
   // Force SwiftShader only for the headless CI path; a real GPU must use the
   // real driver, otherwise we would be testing the same software raster again.
   const launchArgs = GPU_MODE ? ['--no-sandbox', '--ignore-gpu-blocklist']
@@ -122,6 +127,23 @@ const compareTable = () => {
       await sleep(4000);
       const s2 = stepsOf(await page.evaluate(compareTable));
       check('compare table is live (step count advances)', s2 > s1, `steps ${s1} -> ${s2}`);
+
+      // The table renders before its derived columns have data: p50 needs
+      // measured steps, contacts need a stepped world. Sampling the moment the
+      // tbody appears reads "—" for both and fails spuriously (it passed against
+      // a local preview and failed against the live site purely on latency).
+      // Wait for the derived columns to populate before asserting on them.
+      const settled = await (async () => {
+        for (let i = 0; i < 30; i++) {
+          const t = await page.evaluate(compareTable);
+          const relCount = t.map((r) => r[COL.rel]).filter((v) => v && v !== '—').length;
+          const hasContacts = t.some((r) => /^\d+$/.test(r[COL.contacts] ?? ''));
+          if (t.length >= 2 && relCount >= 2 && hasContacts) return true;
+          await sleep(1000);
+        }
+        return false;
+      })();
+      check('compare table populates its derived columns', settled);
 
       // Display self-consistency: the "relative to fastest" column is derived
       // from the p50 column - the fastest engine must read exactly 1.00x and no
@@ -673,7 +695,7 @@ const compareTable = () => {
     await sp2.close();
   } finally {
     await browser.close();
-    server.kill();
+    server?.kill();
   }
 
   const failed = results.filter((r) => !r.ok);
