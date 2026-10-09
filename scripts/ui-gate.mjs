@@ -121,12 +121,20 @@ const compareTable = () => {
       let table = await page.evaluate(compareTable);
       check('compare table has full column set', table[0]?.length >= 10, `cols=${table[0]?.length}`);
 
-      // Frozen-table guard: step count must advance between two samples.
+      // Frozen-table guard: the step count must advance. Poll rather than sample
+      // once - on the live site the engines need longer to start stepping over
+      // the network, so a single 4s sample can read 0 -> 0 and fail spuriously.
+      // A genuinely frozen table never advances and still times out as FAIL.
       const stepsOf = (t) => parseInt(t[0]?.[COL.steps] ?? '0', 10) || 0;
-      const s1 = stepsOf(await page.evaluate(compareTable));
-      await sleep(4000);
-      const s2 = stepsOf(await page.evaluate(compareTable));
-      check('compare table is live (step count advances)', s2 > s1, `steps ${s1} -> ${s2}`);
+      let s1 = stepsOf(await page.evaluate(compareTable));
+      let s2 = s1, live = false;
+      for (let i = 0; i < 14; i++) {
+        await sleep(3000);
+        s2 = stepsOf(await page.evaluate(compareTable));
+        if (s2 > s1) { live = true; break; }
+        s1 = s2;
+      }
+      check('compare table is live (step count advances)', live, `steps ${s1} -> ${s2}`);
 
       // The table renders before its derived columns have data: p50 needs
       // measured steps, contacts need a stepped world. Sampling the moment the
