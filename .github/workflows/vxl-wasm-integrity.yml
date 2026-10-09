@@ -3,7 +3,13 @@
 # 已提交的 public/vendor/vxl/vxl_phys_wasm.wasm 是一份静态二进制，历史上没有任何
 # CI 任务从 BSHSQ Rust 源码重建或校验它——它能在无人察觉的情况下与源码脱节
 # （手改、不同步、换了 rev 没重建）。本门从 vxl_wasm.build.json 钉住的 BSHSQ rev
-# 重建 wasm，与已提交的那份做 sha256 逐字节比对；不一致 => 阻断发布。
+# 重建 wasm，实例化「已提交」与「重建」两份、跑同一固定物理场景，比**行为 checksum
+# （behavior_sha256）+ 导出符号集合**；不一致 => 阻断发布。
+#
+# 为什么是「行为比对」而非「逐字节比对」：rustc 把「源路径散列（crate
+# disambiguator）」渗进 wasm 的类型/函数索引布局，导致同一份源码在不同构建主机 /
+# 路径上字节不等（已在 CI 实测：Windows 本地 vs Linux CI 字节不同）。但物理行为
+# 确定且跨主机一致，所以比行为才能真正抓住「逻辑是否同源」，且与构建主机无关。
 #
 # 复用方式：在 deploy.yml（阻断 deploy）与 ci.yml（PR 合入前）里 `uses:` 调用本文件，
 # 单一事实来源，避免两份 YAML 漂移。GITHUB_TOKEN 默认可用（公开仓只读克隆）。
@@ -25,7 +31,14 @@ jobs:
         with:
           node-version: 22
 
-      # 钉死与溯源文件一致的 Rust 版本：wasm 字节可复现性依赖同一 rustc。
+      # 守卫：wasm-bridge 的引擎 path 依赖必须是可移植的 ../../BSHSQ，绝不能是
+      # 本地绝对盘符路径（如 Z:/BSHSQ）。绝对路径会让 CI 靠符号链接解析不到引擎，
+      # 静默断裂。最先跑，失败零成本。
+      - name: 守卫 wasm-bridge path 依赖（必须 ../../BSHSQ，禁绝对路径）
+        run: node scripts/check-vxl-bridge-paths.mjs
+
+      # 钉死与溯源文件一致的 Rust 版本：物理确定性与构建主机无关，但仍锁同一 rustc
+      # 以排除工具链侧的意外漂移。
       - name: 固定 Rust 工具链
         uses: dtolnay/rust-toolchain@master
         with:
@@ -39,5 +52,5 @@ jobs:
           echo "bshsq_rev=$REV" >> "$GITHUB_OUTPUT"
           echo "pinned BSHSQ rev: $REV"
 
-      - name: 源码完整性重建比对
+      - name: 源码完整性行为比对
         run: node scripts/vxl-wasm-integrity.mjs
