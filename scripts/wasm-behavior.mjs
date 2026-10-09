@@ -11,19 +11,24 @@ const DT = 1 / 60;
 
 // 固定场景：1 静态地面 + 3 层动态盒塔 + 1 动态球，落到地面静置 180 tick。
 // 体序固定（= 加入序），读回按体索引排列，与迭代顺序无关。
-function runScenario(exports, memory) {
+// cfg 可覆盖重力/步数/球初始 X，仅用于敏感性自测；默认形参与已钉死的
+// behavior_sha256（76926111…）完全一致，请勿改动默认值。
+function runScenario(exports, memory, cfg = {}) {
+  const gY = cfg.gravityY ?? -9.81;
+  const steps = cfg.steps ?? 180;
+  const sphereX = cfg.sphereX ?? 0.8;
   const r = (code) => {
     if (code !== 0) throw new Error('wasm op returned ' + code);
   };
-  r(exports.vxl_world_create(0.0, -9.81, 0.0, 0.0, 16));
+  r(exports.vxl_world_create(0.0, gY, 0.0, 0.0, 16));
   exports.vxl_add_box(5.0, 1.0, 5.0, 0.0, -1.0, 0.0, 1000.0, 1); // ground
   exports.vxl_add_box(0.5, 0.5, 0.5, -0.1, 1.0, 0.0, 1.0, 0); // tower 0
   exports.vxl_add_box(0.5, 0.5, 0.5, 0.0, 2.0, 0.0, 1.0, 0); // tower 1
   exports.vxl_add_box(0.5, 0.5, 0.5, 0.1, 3.0, 0.0, 1.0, 0); // tower 2
-  exports.vxl_add_sphere(0.5, 0.8, 6.0, 0.0, 1.0, 0.0, 0); // rolling sphere
+  exports.vxl_add_sphere(0.5, sphereX, 6.0, 0.0, 1.0, 0.0, 0); // rolling sphere
   const n = exports.vxl_body_count();
   if (n !== 5) throw new Error('unexpected body count ' + n);
-  for (let i = 0; i < 180; i++) r(exports.vxl_step(DT));
+  for (let i = 0; i < steps; i++) r(exports.vxl_step(DT));
 
   const pPtr = exports.vxl_read_poses();
   const vPtr = exports.vxl_read_velocities();
@@ -36,12 +41,16 @@ function runScenario(exports, memory) {
   return h.digest('hex');
 }
 
-export async function checksumWasm(wasmPath) {
+export async function checksumWasmWith(wasmPath, cfg = {}) {
   const bytes = readFileSync(wasmPath);
   const { instance } = await WebAssembly.instantiate(bytes, {});
   const { exports } = instance;
   if (exports.vxl_abi() !== 1) throw new Error('vxl_abi != 1');
-  return runScenario(exports, instance.exports.memory);
+  return runScenario(exports, instance.exports.memory, cfg);
+}
+
+export async function checksumWasm(wasmPath) {
+  return checksumWasmWith(wasmPath, {});
 }
 
 // 导出符号集合（ABI 面）。两份同源 wasm 必须完全一致；多/少导出函数即脱节。

@@ -37,6 +37,11 @@ jobs:
       - name: 守卫 wasm-bridge path 依赖（必须 ../../BSHSQ，禁绝对路径）
         run: node scripts/check-vxl-bridge-paths.mjs
 
+      # 行为门敏感性自测：证明 checksum 对物理参数敏感（同样的 wasm 改重力/步数/
+      # 球位 => checksum 必变），否则门检测不到真脱节，等于没门。无 cargo 构建，秒级。
+      - name: 行为门敏感性自测
+        run: node scripts/wasm-behavior.test.mjs
+
       # 钉死与溯源文件一致的 Rust 版本：物理确定性与构建主机无关，但仍锁同一 rustc
       # 以排除工具链侧的意外漂移。
       - name: 固定 Rust 工具链
