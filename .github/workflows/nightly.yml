@@ -34,6 +34,14 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # 上游漂移探针（报告性，绝不阻断 nightly）：把钉死的 bshsq_rev / 锁版本引擎包
+      # 对到上游 HEAD / 最新 npm 版本，发现「源已前进、本地钉死未跟进」就打 WARN。
+      # 现有门禁只验证内部自洽，不会发现这种漂移，所以由 nightly 周期性兜底。
+      # continue-on-error 保证网络/权限异常也绝不红掉 nightly。
+      - name: 上游漂移探针（pin/locked 相对上游是否落后，仅报告）
+        continue-on-error: true
+        run: node scripts/check-upstream-drift.mjs
+
       - name: 资产与MIME
         env:
           SITE_URL: https://bfxh.github.io/physarena
