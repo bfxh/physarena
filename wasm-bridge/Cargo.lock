@@ -236,6 +236,7 @@ dependencies = [
  "vxl-phys-aero",
  "vxl-phys-broad",
  "vxl-phys-core",
+ "vxl-phys-destruction",
  "vxl-phys-field",
  "vxl-phys-fluid",
  "vxl-phys-integrate",
@@ -267,6 +268,10 @@ version = "0.1.0"
 dependencies = [
  "loom",
 ]
+
+[[package]]
+name = "vxl-phys-destruction"
+version = "0.1.0"
 
 [[package]]
 name = "vxl-phys-field"

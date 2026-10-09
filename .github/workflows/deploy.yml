@@ -76,8 +76,14 @@ jobs:
         with:
           path: dist
 
+  # WASM 源码完整性门：从 vxl_wasm.build.json 钉住的 BSHSQ rev 重建 wasm，
+  # 与已提交的 public/vendor/vxl/vxl_phys_wasm.wasm 逐字节比对。不一致 =>
+  # 已提交 wasm 与 BSHSQ 源码脱节，必须阻断发布（否则会部署一份无法溯源的二进制）。
+  vxl-wasm-integrity:
+    uses: ./.github/workflows/vxl-wasm-integrity.yml
+
   deploy:
-    needs: build
+    needs: [build, vxl-wasm-integrity]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:

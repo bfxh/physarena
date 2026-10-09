@@ -1,0 +1,43 @@
+# 复用工作流：BSHSQ wasm 源码完整性门。
+#
+# 已提交的 public/vendor/vxl/vxl_phys_wasm.wasm 是一份静态二进制，历史上没有任何
+# CI 任务从 BSHSQ Rust 源码重建或校验它——它能在无人察觉的情况下与源码脱节
+# （手改、不同步、换了 rev 没重建）。本门从 vxl_wasm.build.json 钉住的 BSHSQ rev
+# 重建 wasm，与已提交的那份做 sha256 逐字节比对；不一致 => 阻断发布。
+#
+# 复用方式：在 deploy.yml（阻断 deploy）与 ci.yml（PR 合入前）里 `uses:` 调用本文件，
+# 单一事实来源，避免两份 YAML 漂移。GITHUB_TOKEN 默认可用（公开仓只读克隆）。
+name: vxl-wasm-integrity
+
+on:
+  workflow_call:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 钉死与溯源文件一致的 Rust 版本：wasm 字节可复现性依赖同一 rustc。
+      - name: 固定 Rust 工具链
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: wasm32-unknown-unknown
+
+      - name: 读钉住 BSHSQ rev
+        id: rev
+        run: |
+          REV=$(node -e "console.log(require('./public/vendor/vxl/vxl_wasm.build.json').bshsq_rev)")
+          echo "bshsq_rev=$REV" >> "$GITHUB_OUTPUT"
+          echo "pinned BSHSQ rev: $REV"
+
+      - name: 源码完整性重建比对
+        run: node scripts/vxl-wasm-integrity.mjs

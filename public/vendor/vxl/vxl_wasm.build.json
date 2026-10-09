@@ -1,0 +1,15 @@
+{
+  "artifact": "vxl_phys_wasm.wasm",
+  "built_at": "2026-10-09T08:35:29Z",
+  "rust_version": "1.99.0",
+  "rust_target": "wasm32-unknown-unknown",
+  "build_profile": "release",
+  "bshsq_repo": "bfxh/BSHSQ",
+  "bshsq_rev": "9eab8187225a19464a1b534ac61ec486bcb06e36",
+  "bshsq_branch": "main",
+  "wasm_sha256": "ef2150bd2bf536d2ae5a07fb2e3d9349607bc0112926d94e5176e8d1379b080a",
+  "wasm_size_bytes": 621500,
+  "lockfile": "wasm-bridge/Cargo.lock",
+  "verification": "Rebuild from bshsq_rev with --locked and compare wasm_sha256. Mismatch => the committed wasm diverged from BSHSQ source.",
+  "generated_by": "scripts/build-vxl-wasm.mjs (npm run build:vxl)"
+}
