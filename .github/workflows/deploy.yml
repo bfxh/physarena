@@ -29,6 +29,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     outputs:
       entry_asset: ${{ steps.entry.outputs.name }}
     steps:
@@ -53,6 +54,13 @@ jobs:
         env:
           UI_GATE_CHANNEL: chrome
         run: node scripts/ui-gate.mjs
+      - name: 上传门禁报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-gate-report-build
+          path: out/ui-gate-report.json
+          if-no-files-found: warn
       # enablement: true lets the action flip the repo's Pages source to
       # "GitHub Actions" on first deploy - without it, a fresh repository fails
       # here with "Get Pages site failed" because no Pages site exists yet.
@@ -71,6 +79,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
@@ -91,6 +100,7 @@ jobs:
     # empty and the propagation wait became a no-op.
     needs: [build, deploy]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: 线上冒烟（真实 URL）
         env:
@@ -151,6 +161,7 @@ jobs:
     # actually propagated (otherwise it would test the previous deployment).
     needs: [deploy, verify-live]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -163,3 +174,10 @@ jobs:
           UI_GATE_CHANNEL: chrome
           UI_GATE_URL: ${{ needs.deploy.outputs.page_url }}
         run: node scripts/ui-gate.mjs
+      - name: 上传门禁报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-gate-report-live
+          path: out/ui-gate-report.json
+          if-no-files-found: warn

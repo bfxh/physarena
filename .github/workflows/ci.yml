@@ -21,6 +21,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,3 +39,10 @@ jobs:
         env:
           UI_GATE_CHANNEL: chrome
         run: node scripts/ui-gate.mjs
+      - name: 上传门禁报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-gate-report
+          path: out/ui-gate-report.json
+          if-no-files-found: warn

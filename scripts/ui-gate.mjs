@@ -22,6 +22,7 @@
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const PORT = Number(process.env.UI_GATE_PORT || 4180);
 // Normally the gate drives a locally-served dist. UI_GATE_URL redirects it at
@@ -51,6 +52,37 @@ function check(name, ok, detail = '') {
   results.push({ name, ok: !!ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
+
+/**
+ * Machine-readable run report.
+ *
+ * The console log is for humans; CI needs the same verdicts as data so a
+ * failure can be inspected after the fact (and counted) without re-running the
+ * gate. Written on every exit path, including the watchdog kill.
+ */
+function writeReport(extra = {}) {
+  try {
+    mkdirSync('out', { recursive: true });
+    const failed = results.filter((r) => !r.ok);
+    writeFileSync('out/ui-gate-report.json', JSON.stringify({
+      base: BASE, when: new Date().toISOString(),
+      passed: results.length - failed.length, total: results.length,
+      failed: failed.map((f) => f.name),
+      results, ...extra,
+    }, null, 2));
+  } catch { /* the report is a convenience, never fail the run over it */ }
+}
+
+// Watchdog: a stuck browser or a promise that never settles must not burn the
+// CI job's entire default budget. Fail fast and still leave a report behind.
+const MAX_MIN = Number(process.env.UI_GATE_MAX_MIN || 25);
+const watchdog = setTimeout(() => {
+  console.error(`ui-gate watchdog: exceeded ${MAX_MIN} min, aborting`);
+  writeReport({ aborted: 'watchdog timeout' });
+  process.exit(1);
+}, MAX_MIN * 60_000);
+watchdog.unref?.();
+process.on('exit', () => clearTimeout(watchdog));
 
 /** Boots `vite preview` (serves dist/) and resolves once it answers. */
 async function startServer() {
@@ -750,8 +782,9 @@ const compareTable = () => {
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+  writeReport();
   if (failed.length) {
     console.log('FAILED:\n' + failed.map((f) => `  - ${f.name}${f.detail ? ` (${f.detail})` : ''}`).join('\n'));
     process.exit(1);
   }
-})().catch((e) => { console.error('ui-gate error:', e); process.exit(1); });
+})().catch((e) => { console.error('ui-gate error:', e); writeReport({ error: String(e) }); process.exit(1); });
