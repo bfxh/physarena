@@ -725,17 +725,23 @@ const compareTable = () => {
     check('BSHSQ health: quaternions normalised', health.minQuatNorm === null || Math.abs(health.minQuatNorm - 1) < 0.05, `minQuatNorm=${health.minQuatNorm}`);
     await hp3.close();
 
-    // twin-run at the same scale: identical final state, twice
+    // twin-run at each scale: identical final state, twice. Sweeping the body
+    // count catches scale-dependent nondeterminism, which a single scale (the
+    // BSHSQ suite's own scale_t1/scale_t2 pair) would miss.
     const dp2 = await newPage(browser);
     await dp2.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
     await waitFor(dp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
     await sleep(1500);
-    const twin = [];
-    for (let k = 0; k < 2; k++) {
-      const r = await dp2.evaluate(([e, s, b]) => window.__physarena.runBenchCells([e], [s], b).then((x) => x[0] ?? {}), ['BSHSQ-Solver', 'pyramid', 600]);
-      twin.push(r.stateHash ?? '');
+    for (const bodies of [300, 600, 900]) {
+      const twin = [];
+      let bad = null;
+      for (let k = 0; k < 2; k++) {
+        const r = await dp2.evaluate(([e, s, b]) => window.__physarena.runBenchCells([e], [s], b).then((x) => x[0] ?? {}), ['BSHSQ-Solver', 'pyramid', bodies]);
+        if (!r.stateHash || r.error) bad = r.error || 'no hash';
+        twin.push(r.stateHash ?? '');
+      }
+      check(`BSHSQ determinism @${bodies} bodies (twin-run)`, !bad && twin[0] !== '' && twin[0] === twin[1], bad || `${twin[0]} vs ${twin[1]}`);
     }
-    check('BSHSQ scale: twin-run agrees bit-for-bit', twin[0] !== '' && twin[0] === twin[1], `${twin[0]} vs ${twin[1]}`);
     await dp2.close();
   } finally {
     await browser.close();
