@@ -187,29 +187,32 @@ const compareTable = () => {
       }
       check('compare table is live (step count advances)', live, `steps ${s1} -> ${s2}`);
 
-      // The table renders before its derived columns have data: p50 needs
-      // measured steps, contacts need a stepped world. Sampling the moment the
-      // tbody appears reads "—" for both and fails spuriously (it passed against
-      // a local preview and failed against the live site purely on latency).
-      // Wait for the derived columns to populate before asserting on them.
-      const settled = await (async () => {
-        for (let i = 0; i < 30; i++) {
-          const t = await page.evaluate(compareTable);
-          const relCount = t.map((r) => r[COL.rel]).filter((v) => v && v !== '—').length;
-          const hasContacts = t.some((r) => /^\d+$/.test(r[COL.contacts] ?? ''));
-          if (t.length >= 2 && relCount >= 2 && hasContacts) return true;
-          await sleep(1000);
-        }
-        return false;
-      })();
+      // The table renders before its derived columns have data: p50 needs measured
+      // steps, contacts need a stepped world, and the relative-to-fastest column is
+      // derived from p50. Sampling too early reads "—" and fails spuriously (it
+      // passed against a local preview and failed against the live site purely on
+      // latency). Poll until the relative-to-fastest column actually carries data,
+      // THEN assert self-consistency on that *same* read — a separate later read
+      // can race a live re-render and catch a momentarily-empty column (observed
+      // as values=[] against the live site). The 30s budget keeps a genuinely
+      // frozen table failing as FAIL, not passing.
+      let rel = [];
+      let settled = false;
+      for (let i = 0; i < 30; i++) {
+        const t = await page.evaluate(compareTable);
+        const hasContacts = t.some((r) => /^\d+$/.test(r[COL.contacts] ?? ''));
+        rel = t.map((r) => parseFloat(String(r[COL.rel]).replace('×', ''))).filter((v) => !Number.isNaN(v));
+        if (t.length >= 2 && rel.length >= 2 && hasContacts) { settled = true; break; }
+        await sleep(1000);
+      }
       check('compare table populates its derived columns', settled);
 
-      // Display self-consistency: the "relative to fastest" column is derived
-      // from the p50 column - the fastest engine must read exactly 1.00x and no
-      // row may read below 1.00x (a nonsensical "faster than fastest"). This
-      // catches a column that renders stale or mis-scaled numbers.
-      const rel = (await page.evaluate(compareTable)).map((r) => parseFloat(String(r[COL.rel]).replace('×', ''))).filter((v) => !Number.isNaN(v));
-      check('compare: relative-to-fastest column is self-consistent', rel.length >= 2 && rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9),
+      // Display self-consistency: the "relative to fastest" column is derived from
+      // the p50 column - the fastest engine must read exactly 1.00x and no row may
+      // read below 1.00x (a nonsensical "faster than fastest"). Assert on the read
+      // we already confirmed carries data, so a transient re-render can't empty it.
+      check('compare: relative-to-fastest column is self-consistent',
+        settled && rel.length >= 2 && rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9),
         `values=${JSON.stringify(rel)}`);
 
       // Metrics presence: at least one engine reports memory, one reports contacts.
