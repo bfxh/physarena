@@ -303,9 +303,18 @@ table.pa-table td.slow { color: var(--danger); }
 .pa-engine-blurb {
   max-height: 2.9em;
   overflow: hidden;
+  /* Fade the cut edge: a hard mid-sentence clip reads as broken text rather
+     than "collapsed, hover to expand". The mask is also the affordance the
+     UI gate looks for, so an accidental hard-clip elsewhere still fails. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 .pa-engine:hover .pa-engine-blurb,
-.pa-engine.on .pa-engine-blurb { max-height: none; }
+.pa-engine.on .pa-engine-blurb {
+  max-height: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 
 /* Compare mode: the per-pane labels carry the headline number and the metrics
    table carries the detail, so the HUD is a third copy of the same information
