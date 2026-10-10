@@ -17,7 +17,7 @@
 // 或 physarena 已提交文件）；对 npm 只做 `npm view <pkg> version`。任何网络/权限
 // 失败都降级为 INFO「无法检查」，绝不抛错退出非零。
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,38 +65,21 @@ try {
       note('INFO', 'BSHSQ pin 与上游 HEAD 一致（0 commit 落后）');
       drift.bshsq = { rev, head, behind: 0, reachable: true };
     } else {
-      // 不等：尝试 blobless 克隆算 behind count（仅在 /tmp，绝不碰 BSHSQ 仓）。
-      let behind = null, reachable = null;
-      const tmp = '/tmp/bshsq-drift-probe';
-      const diag = (m) => console.log(`      [drift-diag] ${m}`);
-      try {
-        if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
-        // blobless 全量克隆（只省文件内容、保留完整提交历史），这样 rev-list --count
-        // 才能算出「钉死 rev 到上游 HEAD」之间的真实落后 commit 数。--depth 1 会丢历史，
-        // 导致计数失败。nightly 一天一次、45min 预算，全量 blobless 克隆完全可接受。
-        // 判失败必须用 !== null：clone 成功时 stdout 为空字符串（falsy）。
-        const cloned = sh('git', ['clone', '--filter=blob:none', '--no-checkout', remote, tmp], { __diag: diag });
-        if (cloned === null) {
-          diag(`克隆 ${remote} 失败，放弃计数`);
-        } else {
-          // 保险：确保钉死 rev 在本地对象库（极端情况下在其它分支上）。
-          sh('git', ['fetch', remote, rev], { cwd: tmp });
-          const isAnc = sh('git', ['merge-base', '--is-ancestor', rev, 'HEAD'], { cwd: tmp });
-          reachable = isAnc === ''; // 退出码 0 => 是祖先
-          const c = sh('git', ['rev-list', '--count', `${rev}..HEAD`], { cwd: tmp, __diag: diag });
-          if (c != null && /^\d+$/.test(c)) behind = Number(c);
-          else diag(`rev-list --count ${rev}..HEAD 未返回数字（got ${JSON.stringify(c)}）`);
-        }
-      } catch (e) {
-        diag(`计数路径异常：${String(e?.message || e)}`);
-        /* 降级：保留 behind=null，下面按「不等但无法计数」报告 */
-      } finally {
-        try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
+      // 用 GitHub compare API 取精确落后 commit 数（单次 REST 调用，秒级）。
+      // 绝不克隆：全量 blobless 克隆实测把 nightly 从 ~3.5min 拖到 20min+（提交历史 /
+      // 树对象太多），为一个数字付这个代价不值；compare 的 ahead_by 直接就是「上游比
+      // 钉死 rev 多出几个 commit」。API 失败则降级为只报「落后 + 该 bump 到哪个 sha」，
+      // 那才是真正可执行的信号。
+      let behind = null;
+      if (process.env.GITHUB_TOKEN || process.env.GH_TOKEN) {
+        const cmp = sh('gh', ['api', `repos/${repo}/compare/${rev}...${head}`, '--jq', '.ahead_by']);
+        if (cmp != null && /^\d+$/.test(cmp)) behind = Number(cmp);
+      } else {
+        console.log('      [drift-diag] 无 GITHUB_TOKEN/GH_TOKEN，跳过 compare API 精确计数');
       }
-      const behindTxt = behind == null ? '（无法计数）' : `（${behind} commit 落后）`;
-      const reachTxt = reachable === false ? '；钉死 rev 不在上游默认分支历史线上（可能来自其他分支）' : '';
-      note('WARN', `BSHSQ pin 落后于上游 HEAD${behindTxt}${reachTxt} —— 考虑 bump bshsq_rev 到 ${head.slice(0, 12)}…`);
-      drift.bshsq = { rev, head, behind, reachable };
+      const behindTxt = behind == null ? '（无法取得精确 commit 数）' : `（${behind} commit 落后）`;
+      note('WARN', `BSHSQ pin 落后于上游 HEAD${behindTxt} —— 考虑 bump bshsq_rev 到 ${head.slice(0, 12)}…`);
+      drift.bshsq = { rev, head, behind };
     }
   }
 } catch {

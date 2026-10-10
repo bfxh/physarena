@@ -40,6 +40,10 @@ jobs:
       # continue-on-error 保证网络/权限异常也绝不红掉 nightly。
       - name: 上游漂移探针（pin/locked 相对上游是否落后，仅报告）
         continue-on-error: true
+        # compare API 需要 token 才能取精确落后 commit 数；没有也能跑，只是降级为
+        # 「只报落后 + 该 bump 到哪个 sha」。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/check-upstream-drift.mjs
 
       - name: 资产与MIME
