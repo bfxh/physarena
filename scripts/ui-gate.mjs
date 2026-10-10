@@ -272,15 +272,28 @@ const compareTable = () => {
       // 在 live 上以 values=[] 假红，而同 commit 的 deploy gate-live 却通过），所以
       // 放到 90s。断言强度不变：仍要求 rel 真的取到 >=2 个数值 —— 只是等得更久，
       // 真正永不填充的表依旧 FAIL（watchdog 25min 足够容纳）。
+      const numCell = (s) => {
+        const v = parseFloat(String(s ?? '').replace(/[^\d.-]/g, ''));
+        return Number.isFinite(v) ? v : null;
+      };
       let rel = [];
+      let p50s = [];
       let settled = false;
+      let ratioUndefined = false;
       let lastRows = [];
       for (let i = 0; i < 90; i++) {
         const t = await page.evaluate(compareTable);
         const hasContacts = t.some((r) => /^\d+$/.test(r[COL.contacts] ?? ''));
         rel = t.map((r) => parseFloat(String(r[COL.rel]).replace('×', ''))).filter((v) => !Number.isNaN(v));
+        p50s = t.map((r) => numCell(r[COL.p50])).filter((v) => v !== null);
         lastRows = t.slice(0, 2).map((r) => ({ p50: r[COL.p50], contacts: r[COL.contacts], rel: r[COL.rel] }));
-        if (t.length >= 2 && rel.length >= 2 && hasContacts) { settled = true; break; }
+        // 「相对最快」由 p50 派生（app.ts:998 的 p50 / fastestP50）。最快的 p50 若为 0，
+        // 比值无定义，此时列显示 '—' 是**正确行为**而非 UI 回归 —— 线上实测出现过两行
+        // p50 都是 0.00 ms、rel 全 '—'，被本门误判成「派生列没填充」。所以接受两种合法
+        // 终态之一：要么 rel 真有数值，要么 p50 全是 0（比值确实算不出来）。
+        // 严格性保留：p50 有真实数值而 rel 仍为空 => 依旧 FAIL。
+        ratioUndefined = p50s.length >= 2 && p50s.every((v) => v === 0);
+        if (t.length >= 2 && hasContacts && (rel.length >= 2 || ratioUndefined)) { settled = true; break; }
         await sleep(1000);
       }
       // 失败时把最后一帧的原始列一起打出来，否则只剩 values=[] 无法判断是「列永不
@@ -293,8 +306,12 @@ const compareTable = () => {
       // read below 1.00x (a nonsensical "faster than fastest"). Assert on the read
       // we already confirmed carries data, so a transient re-render can't empty it.
       check('compare: relative-to-fastest column is self-consistent',
-        settled && rel.length >= 2 && rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9),
-        `values=${JSON.stringify(rel)}${diag}`);
+        settled && (rel.length >= 2
+          // 有数值 => 验自洽：最快那个必须正好 1.00x，且没有任何一行低于 1.00x
+          ? (rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9))
+          // 没数值 => 只有「p50 全为 0、比值确实无定义」才算合法
+          : ratioUndefined),
+        `values=${JSON.stringify(rel)} p50=${JSON.stringify(p50s)}${diag}`);
 
       // Metrics presence: at least one engine reports memory, one reports contacts.
       table = await page.evaluate(compareTable);
