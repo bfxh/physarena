@@ -22,7 +22,8 @@
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.UI_GATE_PORT || 4180);
 // Normally the gate drives a locally-served dist. UI_GATE_URL redirects it at
@@ -145,12 +146,70 @@ async function waitFor(page, fn, timeoutMs = 45000) {
   return false;
 }
 
+/**
+ * 等待 app 钩子 + 外壳就绪，并在未就绪时自行兜底。
+ *
+ * 为什么必须处置 waitFor 的返回值：waitFor 超时是**返回 false** 而不是抛错。若调用方
+ * 忽略它、接着去 `window.__physarena.engineIds()` 之类解引用，undefined 上取属性会抛 TypeError，
+ * 一路冒到顶层 catch，把**整门（110 项）**以一句「ui-gate error」中止掉，其余已经通过
+ * 的检查结果全部丢失 —— 这个坑真实发生过（导入段的 null.dispatchEvent）。
+ *
+ * installHookStub() 是兜底：只在钩子**确实缺失**时装一个「全返回安全空值」的桩，让后续
+ * evaluate 不再抛错、本段检查自然 FAIL，而其余段落照常跑完、报告完整。
+ * 绿色路径完全不受影响（钩子存在时什么都不做）。
+ */
+async function bootReady(page, label, sel = '.pa-shell', timeoutMs = 30000) {
+  const ok = await waitFor(page, () => !!(window.__physarena && document.querySelector(sel)), timeoutMs);
+  if (!ok) {
+    await installHookStub(page);
+    check(`${label}: app 钩子就绪`, false,
+      `window.__physarena/${sel} ${timeoutMs / 1000}s 内未就绪，已装安全桩（避免整门中止）`);
+  }
+  return ok;
+}
+
+/**
+ * 自检：安全桩必须覆盖代码里用到的**每一个** window.__physarena 方法。
+ * 否则将来新增一个调用（比如 __physarena.foo()）而忘了补桩，兜底就会继续抛错、
+ * 又回到「整门被中止」的老路 —— 而这个失效只在钩子真的缺失时才暴露，平时绿得毫无征兆。
+ * 所以把它做成门禁里的一项检查，每次跑门都验一遍。
+ */
+function checkStubCoverage() {
+  try {
+    const src = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+    const used = new Set([...src.matchAll(/window\.__physarena\??\.([A-Za-z_]\w*)/g)].map((m) => m[1]));
+    const block = src.match(/window\.__physarena = \{([\s\S]*?)\n    \};/);
+    if (!block) { check('gate 自检: 安全桩存在', false, '找不到 window.__physarena = { ... } 桩定义'); return; }
+    const stub = new Set([...block[1].matchAll(/([A-Za-z_]\w*)\s*:/g)].map((m) => m[1]));
+    const missing = [...used].filter((k) => !stub.has(k));
+    check('gate 自检: 安全桩覆盖所有 window.__physarena 调用', missing.length === 0,
+      missing.length ? `桩缺: ${missing.join(', ')}` : `${stub.size} 个方法全覆盖`);
+  } catch (e) {
+    check('gate 自检: 安全桩覆盖所有 window.__physarena 调用', false, String(e?.message || e));
+  }
+}
+
+async function installHookStub(page) {
+  await page.evaluate(() => {
+    if (window.__physarena) return;
+    const noop = () => {};
+    window.__physarena = {
+      engineIds: () => [], scenarioIds: () => [], listRenderers: () => [],
+      listScenarios: () => [], simStateSummary: () => [], rendererStats: () => ({}),
+      currentRenderer: () => '', hudText: () => '', getSelfTestResults: () => [],
+      runBenchCells: async () => [], runSelfTest: async () => {},
+      selectEngine: noop, selectRenderer: noop, selectScenario: noop, setBodies: noop,
+    };
+  }).catch(() => {});
+}
+
 const compareTable = () => {
   const rows = [...document.querySelectorAll('.pa-slot-compare tbody tr')];
   return rows.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()));
 };
 
 (async () => {
+  checkStubCoverage(); // 自检放在最前：桩不完整会直接红，不必等到线上真出事才发现
   const server = EXTERNAL ? null : await startServer();
   // Force SwiftShader only for the headless CI path; a real GPU must use the
   // real driver, otherwise we would be testing the same software raster again.
@@ -354,7 +413,7 @@ const compareTable = () => {
     // also opt into WebGPU, which is otherwise gated off.
     const fpUrl = `${BASE}?mode=sandbox&preserveBuffer=1${GPU_MODE ? '&allowWebGPU=1' : ''}`;
     await fp.goto(fpUrl, { waitUntil: 'load' });
-    await waitFor(fp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(fp, 'functional depth');
     await sleep(1500);
 
     // engines: select each, require the sim to actually step
@@ -491,7 +550,7 @@ const compareTable = () => {
     // noise. stateHash is the lab's own fingerprint of the final world state.
     const dp = await newPage(browser);
     await dp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(dp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(dp, 'determinism');
     await sleep(1200);
     const engineForBench = await dp.evaluate(() => window.__physarena.engineIds().find((e) => e === 'rapier3d') || window.__physarena.engineIds()[0]);
     const scenForBench = await dp.evaluate(() => window.__physarena.scenarioIds()[0]);
@@ -523,7 +582,7 @@ const compareTable = () => {
     // whole matrix again post-reload - stronger than a single cell.
     const matrixHashes = cells.map((r) => r.stateHash);
     await dp.reload({ waitUntil: 'load' });
-    await waitFor(dp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(dp, 'determinism (reload)');
     await sleep(1500);
     const cells2 = await dp.evaluate(([es, ss]) => window.__physarena.runBenchCells(es, ss), [matrixEngines, matrixScens]);
     const matrixHashes2 = (Array.isArray(cells2) ? cells2 : []).map((r) => r.stateHash);
@@ -539,7 +598,7 @@ const compareTable = () => {
     // compare (a different N-pane code path than the default 2).
     const tp = await newPage(browser);
     await tp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(tp, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(tp, 'interactions');
     await sleep(2500);
 
     const pauseClicked = await tp.evaluate(() => {
@@ -624,7 +683,7 @@ const compareTable = () => {
     // hanging CI forever.
     const sp = await newPage(browser);
     await sp.goto(`${BASE}?mode=bench`, { waitUntil: 'load' });
-    await waitFor(sp, () => !!(window.__physarena && document.querySelector('.pa-bench')), 30000);
+    await bootReady(sp, 'selftest', '.pa-bench');
     await sleep(1000);
     await sp.evaluate(() => {
       window.__stDone = false;
@@ -689,7 +748,7 @@ const compareTable = () => {
     // check - must not leak an uncaught exception.
     const bc = await newPage(browser);
     await bc.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(bc, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(bc, 'boot race');
     await bc.evaluate(async () => {
       const es = window.__physarena.engineIds();
       const ss = window.__physarena.scenarioIds();
@@ -747,13 +806,13 @@ const compareTable = () => {
     // fallback when there is no query string).
     const hp2 = await newPage(browser);
     await hp2.goto(BASE, { waitUntil: 'load' });
-    await waitFor(hp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(hp2, 'share URL');
     await sleep(1500);
     await hp2.evaluate(() => window.__physarena.selectEngine('jolt'));
     await sleep(2500);
     const hash = await hp2.evaluate(() => location.hash);
     await hp2.reload({ waitUntil: 'load' });
-    await waitFor(hp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(hp2, 'share URL (reload)');
     const restored = await waitFor(hp2, () => window.__physarena.simStateSummary().some((x) => x.id === 'jolt'), 20000);
     check('share URL: hash round-trip restores the engine', /engine=jolt/.test(hash) && restored, `hash=${hash}`);
     await hp2.close();
@@ -763,7 +822,7 @@ const compareTable = () => {
     // not grow per-frame (leak).
     const sp2 = await newPage(browser);
     await sp2.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(sp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(sp2, 'soak');
     await sleep(2500);
     const geo0 = await sp2.evaluate(() => window.__physarena.rendererStats()?.geometries ?? 0);
     let monotone = true, lastStep = -1, errsDuringSoak = 0;
@@ -789,7 +848,7 @@ const compareTable = () => {
     // PhysArena previously only checked NaN, which a subtly broken solver passes.
     const hp3 = await newPage(browser);
     await hp3.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(hp3, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(hp3, 'BSHSQ scale');
     await hp3.evaluate(() => window.__physarena.selectEngine('BSHSQ-Solver'));
     await sleep(2500);
     await hp3.evaluate(() => window.__physarena.setBodies(600));
@@ -809,7 +868,7 @@ const compareTable = () => {
     // BSHSQ suite's own scale_t1/scale_t2 pair) would miss.
     const dp2 = await newPage(browser);
     await dp2.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(dp2, () => !!(window.__physarena && document.querySelector('.pa-shell')), 30000);
+    await bootReady(dp2, 'BSHSQ twin-run');
     await sleep(1500);
     for (const bodies of [300, 600, 900]) {
       const twin = [];
