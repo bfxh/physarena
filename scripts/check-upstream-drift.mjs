@@ -24,10 +24,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SIDECAR = resolve(ROOT, 'public/vendor/vxl/vxl_wasm.build.json');
 
+// 注意：成功但只往 stderr 写输出的命令（git clone 的进度就是）stdout 为空字符串，
+// 所以调用方必须用 `!== null` 判失败，绝不能用真值判断（'' 是 falsy，会把成功的
+// 克隆当成失败、静默跳过整个分支 —— 这是本脚本踩过的真 bug）。
 function sh(cmd, args, opts = {}) {
   try {
     return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-  } catch {
+  } catch (e) {
+    if (opts.__diag) opts.__diag(String(e?.stderr || e?.message || e).slice(0, 400));
     return null;
   }
 }
@@ -64,20 +68,27 @@ try {
       // 不等：尝试 blobless 克隆算 behind count（仅在 /tmp，绝不碰 BSHSQ 仓）。
       let behind = null, reachable = null;
       const tmp = '/tmp/bshsq-drift-probe';
+      const diag = (m) => console.log(`      [drift-diag] ${m}`);
       try {
         if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
         // blobless 全量克隆（只省文件内容、保留完整提交历史），这样 rev-list --count
         // 才能算出「钉死 rev 到上游 HEAD」之间的真实落后 commit 数。--depth 1 会丢历史，
         // 导致计数失败。nightly 一天一次、45min 预算，全量 blobless 克隆完全可接受。
-        if (sh('git', ['clone', '--filter=blob:none', '--no-checkout', remote, tmp])) {
+        // 判失败必须用 !== null：clone 成功时 stdout 为空字符串（falsy）。
+        const cloned = sh('git', ['clone', '--filter=blob:none', '--no-checkout', remote, tmp], { __diag: diag });
+        if (cloned === null) {
+          diag(`克隆 ${remote} 失败，放弃计数`);
+        } else {
           // 保险：确保钉死 rev 在本地对象库（极端情况下在其它分支上）。
           sh('git', ['fetch', remote, rev], { cwd: tmp });
           const isAnc = sh('git', ['merge-base', '--is-ancestor', rev, 'HEAD'], { cwd: tmp });
           reachable = isAnc === ''; // 退出码 0 => 是祖先
-          const c = sh('git', ['rev-list', '--count', `${rev}..HEAD`], { cwd: tmp });
-          if (c && /^\d+$/.test(c)) behind = Number(c);
+          const c = sh('git', ['rev-list', '--count', `${rev}..HEAD`], { cwd: tmp, __diag: diag });
+          if (c != null && /^\d+$/.test(c)) behind = Number(c);
+          else diag(`rev-list --count ${rev}..HEAD 未返回数字（got ${JSON.stringify(c)}）`);
         }
-      } catch {
+      } catch (e) {
+        diag(`计数路径异常：${String(e?.message || e)}`);
         /* 降级：保留 behind=null，下面按「不等但无法计数」报告 */
       } finally {
         try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
