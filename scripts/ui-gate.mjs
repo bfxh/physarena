@@ -196,16 +196,26 @@ const compareTable = () => {
       // can race a live re-render and catch a momentarily-empty column (observed
       // as values=[] against the live site). The 30s budget keeps a genuinely
       // frozen table failing as FAIL, not passing.
+      // 预算要给足：线上站点（Pages + 真实网络）比本地预览慢得多，而 relative-to-fastest
+      // 依赖 p50，p50 又要攒够实测步数才出数。实测 30s 预算在线上偶发不够（曾两次
+      // 在 live 上以 values=[] 假红，而同 commit 的 deploy gate-live 却通过），所以
+      // 放到 90s。断言强度不变：仍要求 rel 真的取到 >=2 个数值 —— 只是等得更久，
+      // 真正永不填充的表依旧 FAIL（watchdog 25min 足够容纳）。
       let rel = [];
       let settled = false;
-      for (let i = 0; i < 30; i++) {
+      let lastRows = [];
+      for (let i = 0; i < 90; i++) {
         const t = await page.evaluate(compareTable);
         const hasContacts = t.some((r) => /^\d+$/.test(r[COL.contacts] ?? ''));
         rel = t.map((r) => parseFloat(String(r[COL.rel]).replace('×', ''))).filter((v) => !Number.isNaN(v));
+        lastRows = t.slice(0, 2).map((r) => ({ p50: r[COL.p50], contacts: r[COL.contacts], rel: r[COL.rel] }));
         if (t.length >= 2 && rel.length >= 2 && hasContacts) { settled = true; break; }
         await sleep(1000);
       }
-      check('compare table populates its derived columns', settled);
+      // 失败时把最后一帧的原始列一起打出来，否则只剩 values=[] 无法判断是「列永不
+      // 填充」还是「填充了但格式不对」——上次排查就是被这个信息缺失拖慢的。
+      const diag = settled ? '' : ` lastRows=${JSON.stringify(lastRows)}`;
+      check('compare table populates its derived columns', settled, diag);
 
       // Display self-consistency: the "relative to fastest" column is derived from
       // the p50 column - the fastest engine must read exactly 1.00x and no row may
@@ -213,7 +223,7 @@ const compareTable = () => {
       // we already confirmed carries data, so a transient re-render can't empty it.
       check('compare: relative-to-fastest column is self-consistent',
         settled && rel.length >= 2 && rel.some((v) => Math.abs(v - 1) < 1e-6) && rel.every((v) => v >= 1 - 1e-9),
-        `values=${JSON.stringify(rel)}`);
+        `values=${JSON.stringify(rel)}${diag}`);
 
       // Metrics presence: at least one engine reports memory, one reports contacts.
       table = await page.evaluate(compareTable);
