@@ -159,7 +159,19 @@ async function waitFor(page, fn, timeoutMs = 45000) {
  * 绿色路径完全不受影响（钩子存在时什么都不做）。
  */
 async function bootReady(page, label, sel = '.pa-shell', timeoutMs = 30000) {
-  const ok = await waitFor(page, () => !!(window.__physarena && document.querySelector(sel)), timeoutMs);
+  // 注意：page.evaluate 会把函数序列化到浏览器里执行，**拿不到 Node 侧的闭包变量**。
+  // 早先写成 `() => document.querySelector(sel)`，浏览器里 sel 是 undefined =>
+  // 谓词恒 false => 30s 后必然超时，11 个 bootReady 全部假红（而功能检查其实都过了）。
+  // 必须把 sel 作为 evaluate 的**实参**传进去。
+  let ok = false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    try {
+      ok = await page.evaluate((s) => !!(window.__physarena && document.querySelector(s)), sel);
+      if (ok) break;
+    } catch { /* 页面还没就绪，重试 */ }
+    await sleep(700);
+  }
   if (!ok) {
     await installHookStub(page);
     check(`${label}: app 钩子就绪`, false,
