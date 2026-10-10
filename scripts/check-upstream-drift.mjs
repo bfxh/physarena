@@ -13,9 +13,9 @@
 // 的哲学就是「只报告、不移动站点」），目的是让钉死过期这件事在 CI 日志/产物里
 // 可见，而不是悄悄烂掉。
 //
-// 全程只读：对 BSHSQ 只做 ls-remote + /tmp 下的 blobless 克隆（绝不改 BSHSQ 仓
-// 或 physarena 已提交文件）；对 npm 只做 `npm view <pkg> version`。任何网络/权限
-// 失败都降级为 INFO「无法检查」，绝不抛错退出非零。
+// 全程只读：对 BSHSQ 只用 `git ls-remote` + GitHub compare REST API（绝不克隆、
+// 绝不改 BSHSQ 仓或 physarena 已提交文件）；对 npm 只用 `npm view <pkg> version`。
+// 任何网络/权限失败都降级为 INFO「无法检查」，绝不抛错退出非零。
 import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -24,10 +24,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SIDECAR = resolve(ROOT, 'public/vendor/vxl/vxl_wasm.build.json');
 
-// 注意：成功但只往 stderr 写输出的命令（git clone 的进度就是）stdout 为空字符串，
+// 契约（有回归测试守护，见 scripts/upstream-drift.test.mjs）：
+//   - 成功 => 返回 stdout 去空白后的字符串（**可能为空字符串 ''**）
+//   - 失败 => 返回 null
+// 注意：成功但只往 stderr 写输出的命令（git clone/npm view 的进度就是）stdout 为空，
 // 所以调用方必须用 `!== null` 判失败，绝不能用真值判断（'' 是 falsy，会把成功的
-// 克隆当成失败、静默跳过整个分支 —— 这是本脚本踩过的真 bug）。
-function sh(cmd, args, opts = {}) {
+// 命令当成失败、静默跳过整个分支 —— 这是本脚本踩过的真 bug，曾导致「无法计数」）。
+export function sh(cmd, args, opts = {}) {
   try {
     return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
   } catch (e) {
@@ -36,92 +39,106 @@ function sh(cmd, args, opts = {}) {
   }
 }
 
-const findings = [];
-function note(kind, msg) {
-  findings.push({ kind, msg });
-  console.log(`${kind === 'WARN' ? 'WARN ' : 'INFO '} ${msg}`);
+/** 从 `git ls-remote` 输出里解析默认分支 tip 的 sha。导出以便单测。 */
+export function parseDefaultHead(ls) {
+  const lines = (ls || '').split('\n');
+  const line = lines.find((l) => /refs\/heads\/(main|master)$/.test(l))
+    || lines.find((l) => /\tHEAD$/.test(l));
+  return line ? line.split(/\s+/)[0] : null;
 }
 
-const drift = { bshsq: null, vendored: [] };
-
-// ---- 1. BSHSQ pin 漂移：钉死 rev 相对上游默认分支落后多少 commit ----------
-try {
-  const meta = JSON.parse(readFileSync(SIDECAR, 'utf8'));
-  const rev = meta.bshsq_rev;
-  const repo = meta.bshsq_repo || 'bfxh/BSHSQ';
-  if (!rev) {
-    note('WARN', 'vxl_wasm.build.json 缺少 bshsq_rev，跳过 BSHSQ 漂移检查');
-  } else {
-    const remote = `https://github.com/${repo}.git`;
-    note('INFO', `BSHSQ pin = ${rev} (repo ${repo})`);
-    // 廉价先取上游 HEAD（默认分支 tip）做相等性判断。
-    const ls = sh('git', ['ls-remote', remote]);
-    const headLine = (ls || '').split('\n').find((l) => /refs\/heads\/(main|master)$/.test(l))
-      || (ls || '').split('\n').find((l) => l.endsWith('\tHEAD'));
-    const head = headLine ? headLine.split(/\s+/)[0] : null;
-    if (!head) {
-      note('INFO', `无法 ls-remote ${repo}（网络/权限），BSHSQ 漂移跳过`);
-    } else if (head === rev) {
-      note('INFO', 'BSHSQ pin 与上游 HEAD 一致（0 commit 落后）');
-      drift.bshsq = { rev, head, behind: 0, reachable: true };
-    } else {
-      // 用 GitHub compare API 取精确落后 commit 数（单次 REST 调用，秒级）。
-      // 绝不克隆：全量 blobless 克隆实测把 nightly 从 ~3.5min 拖到 20min+（提交历史 /
-      // 树对象太多），为一个数字付这个代价不值；compare 的 ahead_by 直接就是「上游比
-      // 钉死 rev 多出几个 commit」。API 失败则降级为只报「落后 + 该 bump 到哪个 sha」，
-      // 那才是真正可执行的信号。
-      let behind = null;
-      if (process.env.GITHUB_TOKEN || process.env.GH_TOKEN) {
-        const cmp = sh('gh', ['api', `repos/${repo}/compare/${rev}...${head}`, '--jq', '.ahead_by']);
-        if (cmp != null && /^\d+$/.test(cmp)) behind = Number(cmp);
-      } else {
-        console.log('      [drift-diag] 无 GITHUB_TOKEN/GH_TOKEN，跳过 compare API 精确计数');
-      }
-      const behindTxt = behind == null ? '（无法取得精确 commit 数）' : `（${behind} commit 落后）`;
-      note('WARN', `BSHSQ pin 落后于上游 HEAD${behindTxt} —— 考虑 bump bshsq_rev 到 ${head.slice(0, 12)}…`);
-      drift.bshsq = { rev, head, behind };
-    }
-  }
-} catch {
-  note('INFO', '读取 vxl_wasm.build.json 失败，BSHSQ 漂移跳过');
-}
-
-// ---- 2. vendored 引擎版本漂移：锁版本 vs npm 最新 -------------------------
-try {
-  const lock = JSON.parse(readFileSync(resolve(ROOT, 'package-lock.json'), 'utf8'));
-  const pkgs = {
-    '@babylonjs/havok': 'vendor/havok/HavokPhysics.wasm',
-    'physx-js-webidl': 'vendor/physx/physx-js-webidl.wasm',
-    'ammojs-typed': 'vendor/ammo/ammo.js',
+export function runDrift() {
+  const findings = [];
+  const note = (kind, msg) => {
+    findings.push({ kind, msg });
+    console.log(`${kind === 'WARN' ? 'WARN ' : 'INFO '} ${msg}`);
   };
-  for (const [pkg, dest] of Object.entries(pkgs)) {
-    const locked = lock.packages?.[`node_modules/${pkg}`]?.version
-      || lock.dependencies?.[pkg]?.version;
-    const latest = sh('npm', ['view', pkg, 'version']);
-    if (!locked) {
-      note('INFO', `${pkg} 未在 package-lock 找到锁定版本，跳过`);
-      continue;
-    }
-    if (!latest) {
-      note('INFO', `无法 npm view ${pkg}（网络/registry），跳过`);
-      continue;
-    }
-    if (locked !== latest) {
-      note('WARN', `${pkg} 锁定 ${locked} < 最新 ${latest} —— vendored ${dest} 可升级（先 npm i ${pkg}@latest 再 npm run vendor）`);
-      drift.vendored.push({ pkg, dest, locked, latest });
+  const drift = { bshsq: null, vendored: [] };
+
+  // ---- 1. BSHSQ pin 漂移：钉死 rev 相对上游默认分支落后多少 commit ----------
+  try {
+    const meta = JSON.parse(readFileSync(SIDECAR, 'utf8'));
+    const rev = meta.bshsq_rev;
+    const repo = meta.bshsq_repo || 'bfxh/BSHSQ';
+    if (!rev) {
+      note('WARN', 'vxl_wasm.build.json 缺少 bshsq_rev，跳过 BSHSQ 漂移检查');
     } else {
-      note('INFO', `${pkg} 锁定 ${locked} == 最新`);
+      const remote = `https://github.com/${repo}.git`;
+      note('INFO', `BSHSQ pin = ${rev} (repo ${repo})`);
+      // 廉价先取上游 HEAD（默认分支 tip）做相等性判断。
+      const head = parseDefaultHead(sh('git', ['ls-remote', remote]));
+      if (!head) {
+        note('INFO', `无法 ls-remote ${repo}（网络/权限），BSHSQ 漂移跳过`);
+      } else if (head === rev) {
+        note('INFO', 'BSHSQ pin 与上游 HEAD 一致（0 commit 落后）');
+        drift.bshsq = { rev, head, behind: 0 };
+      } else {
+        // 用 GitHub compare API 取精确落后 commit 数（单次 REST 调用，秒级）。
+        // 绝不克隆：全量 blobless 克隆实测把 nightly 从 ~3.5min 拖到 20min+（提交历史 /
+        // 树对象太多），为一个数字付这个代价不值；compare 的 ahead_by 直接就是「上游比
+        // 钉死 rev 多出几个 commit」。API 失败则降级为只报「落后 + 该 bump 到哪个 sha」，
+        // 那才是真正可执行的信号。
+        let behind = null;
+        if (process.env.GITHUB_TOKEN || process.env.GH_TOKEN) {
+          const cmp = sh('gh', ['api', `repos/${repo}/compare/${rev}...${head}`, '--jq', '.ahead_by']);
+          if (cmp != null && /^\d+$/.test(cmp)) behind = Number(cmp);
+        } else {
+          console.log('      [drift-diag] 无 GITHUB_TOKEN/GH_TOKEN，跳过 compare API 精确计数');
+        }
+        const behindTxt = behind == null ? '（无法取得精确 commit 数）' : `（${behind} commit 落后）`;
+        note('WARN', `BSHSQ pin 落后于上游 HEAD${behindTxt} —— 考虑 bump bshsq_rev 到 ${head.slice(0, 12)}…`);
+        drift.bshsq = { rev, head, behind };
+      }
     }
+  } catch {
+    note('INFO', '读取 vxl_wasm.build.json 失败，BSHSQ 漂移跳过');
   }
-} catch {
-  note('INFO', '读取 package-lock.json 失败，vendored 版本漂移跳过');
+
+  // ---- 2. vendored 引擎版本漂移：锁版本 vs npm 最新 -------------------------
+  try {
+    const lock = JSON.parse(readFileSync(resolve(ROOT, 'package-lock.json'), 'utf8'));
+    const pkgs = {
+      '@babylonjs/havok': 'vendor/havok/HavokPhysics.wasm',
+      'physx-js-webidl': 'vendor/physx/physx-js-webidl.wasm',
+      'ammojs-typed': 'vendor/ammo/ammo.js',
+    };
+    for (const [pkg, dest] of Object.entries(pkgs)) {
+      const locked = lock.packages?.[`node_modules/${pkg}`]?.version
+        || lock.dependencies?.[pkg]?.version;
+      const latest = sh('npm', ['view', pkg, 'version']);
+      if (!locked) {
+        note('INFO', `${pkg} 未在 package-lock 找到锁定版本，跳过`);
+        continue;
+      }
+      if (!latest) {
+        note('INFO', `无法 npm view ${pkg}（网络/registry），跳过`);
+        continue;
+      }
+      if (locked !== latest) {
+        note('WARN', `${pkg} 锁定 ${locked} < 最新 ${latest} —— vendored ${dest} 可升级（先 npm i ${pkg}@latest 再 npm run vendor）`);
+        drift.vendored.push({ pkg, dest, locked, latest });
+      } else {
+        note('INFO', `${pkg} 锁定 ${locked} == 最新`);
+      }
+    }
+  } catch {
+    note('INFO', '读取 package-lock.json 失败，vendored 版本漂移跳过');
+  }
+
+  // ---- 汇总（报告性，永远 exit 0）-----------------------------------------
+  const warns = findings.filter((f) => f.kind === 'WARN');
+  console.log(`\n[upstream-drift] ${warns.length} 项漂移警告，${findings.length - warns.length} 项信息`);
+  try {
+    mkdirSync('out', { recursive: true });
+    writeFileSync('out/upstream-drift.json', JSON.stringify({ when: new Date().toISOString(), drift, warns: warns.length }, null, 2));
+  } catch { /* 报告是便利物，绝不因此失败 */ }
+  return { drift, findings, warns: warns.length };
 }
 
-// ---- 汇总（报告性，永远 exit 0）-----------------------------------------
-const warns = findings.filter((f) => f.kind === 'WARN');
-console.log(`\n[upstream-drift] ${warns.length} 项漂移警告，${findings.length - warns.length} 项信息`);
-try {
-  mkdirSync('out', { recursive: true });
-  writeFileSync('out/upstream-drift.json', JSON.stringify({ when: new Date().toISOString(), drift, warns: warns.length }, null, 2));
-} catch { /* 报告是便利物，绝不因此失败 */ }
-process.exit(0);
+// CLI 守卫：让本文件既能被 nightly 直接跑，又能被单测 import 而不触发网络探测
+// （脚本末尾的 process.exit 会直接杀掉测试进程，所以必须守卫）。
+// 约定与 scripts/build-vxl-wasm.mjs 一致。
+if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/check-upstream-drift.mjs')) {
+  runDrift();
+  process.exit(0);
+}

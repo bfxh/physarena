@@ -41,6 +41,11 @@ jobs:
       # vendor，跑晚了就测不出「提交滞后于锁版本」的脱节。
       - name: vendor 漂移门（public/vendor == 锁版本引擎包产物）
         run: node scripts/check-vendor-drift.mjs
+      # 上游漂移探针的 sh() 契约回归自测（秒级）：锁死「成功返回 ''（可能是空串）/
+      # 失败返回 null」。真值判断会把「成功但只写 stderr」的命令误判为失败、静默跳过
+      # 分支——这个坑已真实发生过（表现为永远「无法计数」），用测试钉死防复发。
+      - name: 上游漂移探针契约自测
+        run: node scripts/upstream-drift.test.mjs
       - run: npm run typecheck
       - run: npm run build
       # Same headless UI regression gate as main - see scripts/ui-gate.mjs.
