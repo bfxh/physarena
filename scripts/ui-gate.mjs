@@ -711,23 +711,36 @@ const compareTable = () => {
     const obj = ['v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'v 0 0 1', 'f 1 2 3', 'f 1 2 4', 'f 1 3 4', 'f 2 3 4'].join('\n');
     const imp = await newPage(browser);
     await imp.goto(`${BASE}?mode=sandbox`, { waitUntil: 'load' });
-    await waitFor(imp, () => !!(window.__physarena && document.querySelector('.pa-stage')), 30000);
-    await imp.evaluate((text) => {
-      const dt = new DataTransfer();
-      dt.items.add(new File([text], 'gate.obj', { type: 'text/plain' }));
-      document.querySelector('.pa-stage').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
-    }, obj);
-    let imported = false;
-    for (let i = 0; i < 24; i++) {
-      if (await imp.evaluate(() => window.__physarena.scenarioIds().some((id) => id.startsWith('import:')))) { imported = true; break; }
-      await sleep(500);
+    // waitFor 超时是返回 false，不是抛错——必须据此跳过。此前忽略了返回值，直接
+    // `querySelector('.pa-stage').dispatchEvent(...)`，一旦 sandbox 渲染慢就是
+    // null.dispatchEvent => TypeError => 冒到顶层 catch => 整门（110 项）以
+    // 「ui-gate error」中止，其余已通过的检查结果全丢。单点超时只该红它自己那一项。
+    // 线上站点渲染比本地预览慢，给 60s（默认 45s 在 live 上偏紧）。
+    const stageReady = await waitFor(imp, () => !!(window.__physarena && document.querySelector('.pa-stage')), 60000);
+    if (!stageReady) {
+      check('import: model drop creates an imported scenario', false,
+        'sandbox 未在 30s 内渲染出 .pa-stage，跳过导入（否则整门中止）');
+      await imp.close();
+    } else {
+      await imp.evaluate((text) => {
+        const stage = document.querySelector('.pa-stage');
+        if (!stage) return; // 双保险：绝不让 null.dispatchEvent 冒出去
+        const dt = new DataTransfer();
+        dt.items.add(new File([text], 'gate.obj', { type: 'text/plain' }));
+        stage.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      }, obj);
+      let imported = false;
+      for (let i = 0; i < 24; i++) {
+        if (await imp.evaluate(() => window.__physarena?.scenarioIds?.().some((id) => id.startsWith('import:')))) { imported = true; break; }
+        await sleep(500);
+      }
+      check('import: model drop creates an imported scenario', imported);
+      if (imported) {
+        const sims = await waitFor(imp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 1), 25000);
+        check('import: imported scenario simulates', sims);
+      }
+      await imp.close();
     }
-    check('import: model drop creates an imported scenario', imported);
-    if (imported) {
-      const sims = await waitFor(imp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 1), 25000);
-      check('import: imported scenario simulates', sims);
-    }
-    await imp.close();
 
     // ---- 9. shareable URL round-trip + bounded soak ---------------------
     // A shared/reloaded URL must restore what its hash claims (the hash is the
