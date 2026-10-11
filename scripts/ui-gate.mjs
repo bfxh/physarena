@@ -208,6 +208,7 @@ async function installHookStub(page) {
     window.__physarena = {
       engineIds: () => [], scenarioIds: () => [], listRenderers: () => [],
       listScenarios: () => [], simStateSummary: () => [], rendererStats: () => ({}),
+      state: () => ({ slots: [], mode: '', paused: false, compareIds: [] }),
       currentRenderer: () => '', hudText: () => '', getSelfTestResults: () => [],
       runBenchCells: async () => [], runSelfTest: async () => {},
       selectEngine: noop, selectRenderer: noop, selectScenario: noop, setBodies: noop,
@@ -450,7 +451,19 @@ const compareTable = () => {
     for (const id of engineIds) {
       try { await fp.evaluate((e) => window.__physarena.selectEngine(e), id); } catch { /* handled by the check */ }
       const ran = await waitFor(fp, () => window.__physarena.simStateSummary().some((x) => (x.steps ?? 0) > 2), 45000);
-      check(`engine steps: ${id}`, ran);
+      // 没步进时不再笼统报「steps 没前进」——用 state() 钩子给出精确归因：引擎启动失败
+      // （status=error + error 详情）、还是卡在 loading 没就绪、还是真静默死。这正是 stash
+      // 加 state() 钩子的本意（让无头探针区分「加载中」与「静默死」，无需刮 DOM）。
+      let diag = '';
+      if (!ran) {
+        const slot = await fp.evaluate((e) => {
+          const st = window.__physarena.state?.();
+          const s = st?.slots?.find((x) => x.id === e);
+          return s ? { status: s.status, error: s.error } : null;
+        }, id).catch(() => null);
+        diag = slot ? `slot status=${slot.status}${slot.error ? ` err=${slot.error}` : ''}` : 'state() 不可用';
+      }
+      check(`engine steps: ${id}`, ran, diag);
     }
 
     // renderers: select each, sample the canvas for real pixels. A renderer the

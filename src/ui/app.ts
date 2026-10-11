@@ -1620,6 +1620,25 @@ export class App {
     (window as unknown as Record<string, unknown>).__physarena = {
       engineIds: () => this.engines.map((e) => e.meta.id),
       scenarioIds: () => this.scenarios.map((s) => s.id),
+      /** Live per-slot state, so a headless probe can tell "loading" from
+       *  "silently dead" without scraping the DOM. */
+      state: () => ({
+        mode: this.mode,
+        paused: this.paused,
+        compareIds: [...this.compareIds],
+        slots: [...this.slots.values()].map((s) => ({
+          id: s.entry.meta.id,
+          status: s.status,
+          hasEngine: !!s.engine,
+          hasSim: !!s.sim,
+          hasWorld: !!s.sim?.world,
+          simPaused: s.sim ? s.sim.paused : null,
+          steps: s.sim ? s.sim.steps : null,
+          dynamicCount: s.sim ? s.sim.dynamicCount : null,
+          sceneKey: s.sceneKey,
+          error: s.error ?? null,
+        })),
+      }),
       selectEngine: (id: string) => this.selectEngine(id),
       selectScenario: (id: string) => {
         const s = this.scenarios.find((x) => x.id === id);
