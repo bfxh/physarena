@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { runRatchet } from './selftest-ratchet.mjs';
 
 const PORT = Number(process.env.UI_GATE_PORT || 4180);
 // Normally the gate drives a locally-served dist. UI_GATE_URL redirects it at
@@ -721,6 +722,10 @@ const compareTable = () => {
     // so the gate asserts the *machinery*: it finishes, every engine boots or
     // reports an explicit error, and every engine yields probe verdicts. It does
     // not assert a pass rate - that is the lab's output, not a build invariant.
+    // WHAT IT DOES gate is *new regressions*: the ratchet block below compares
+    // the current fail set against scripts/selftest-baseline.json and fails only
+    // on fail pairs not already in the baseline - so a regression that makes an
+    // engine suddenly drop probes can no longer ship silently.
     // Polled rather than awaited so a hung self-test fails the gate instead of
     // hanging CI forever.
     const sp = await newPage(browser);
@@ -749,6 +754,23 @@ const compareTable = () => {
     check('selftest: every engine yields probe verdicts', totalProbes > 0 && rows.every((r) => r.n > 0),
       `per-engine=${JSON.stringify(rows.map((r) => r.n))}`);
     console.log(`      selftest pass/fail per engine: ${JSON.stringify(rows.map((r) => `${r.id}:${r.pass}/${r.fail}`))}`);
+
+    // ---- 自检矩阵回归护栏（ratchet）-------------------------------------
+    // 不卡通过率（能力边界 fail 属「实验室输出」，见上方注释），只拦**新增** fail：把当前
+    // fail 集合对到 scripts/selftest-baseline.json 钉死的基线，基线外的 fail 才阻断——已知
+    // 的能力边界 fail 进基线后不报红，新回归必须显式 SELFTEST_REBASELINE=1 才能放行。
+    // 基线缺失时进入 capture 模式（写基线并放行），避免首次引入护栏就盲红。
+    const detailRows = await sp.evaluate(() => window.__physarena.getSelfTestResults().map((r) => ({
+      engineId: r.engineId, bootOk: r.bootOk,
+      results: (r.results || []).map((x) => ({ probeId: x.probeId, status: x.status })),
+    })));
+    const rr = runRatchet(detailRows, { rebaseline: process.env.SELFTEST_REBASELINE === '1' });
+    if (rr.rebaselined) {
+      console.log(`      [selftest-ratchet] CAPTURE 模式：写入基线 ${rr.fails.length} 个 fail：`);
+      console.log('        ' + rr.fails.join('\n        '));
+    }
+    check('selftest: no new probe regressions vs baseline', rr.ok,
+      rr.rebaselined ? 'baseline captured' : `新增 fail：${rr.newFails.join(', ')}`);
     // the self-test matrix must actually render in the bench pane, not just
     // exist in the hook - this is the compatibility matrix a reader comes for.
     await sleep(1200);

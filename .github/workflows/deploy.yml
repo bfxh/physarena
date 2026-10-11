@@ -47,6 +47,9 @@ jobs:
         run: node scripts/check-vendor-drift.mjs
       # Type gate first: a type error must never reach the bundler.
       - run: npm run typecheck
+      # 自检矩阵 ratchet 护栏契约自测（秒级）：与 ci.yml 同款，确保 main 推送也验证护栏逻辑。
+      - name: 自检矩阵 ratchet 契约自测
+        run: node scripts/selftest-ratchet.test.mjs
       - run: npm run build
       # UI regression gate. A build that compiles is not a build that renders:
       # the compare table freezing, a metrics column collapsing to "—", and
@@ -220,4 +223,13 @@ jobs:
         with:
           name: ui-gate-report-live
           path: out/ui-gate-report.json
+          if-no-files-found: warn
+      # capture 模式下 ratchet 写出的基线（out/selftest-baseline.json）；主推送 ci.yml 不跑，
+      # 故此处也上传，供人工落到 scripts/ 激活护栏。
+      - name: 上传自检基线（capture 产物）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-baseline-live
+          path: out/selftest-baseline.json
           if-no-files-found: warn

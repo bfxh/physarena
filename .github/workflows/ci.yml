@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# 取消同一 PR/分支上被新提交顶掉的旧运行，省 CI 分钟、避免过期结果误导。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # WASM 源码完整性门（PR / 非 main 分支同样要拦）：从钉住 BSHSQ rev 重建 wasm
   # 与已提交文件逐字节比对，避免脱节 wasm 合入后才在 main 上才暴露。
@@ -46,6 +51,9 @@ jobs:
       # 分支——这个坑已真实发生过（表现为永远「无法计数」），用测试钉死防复发。
       - name: 上游漂移探针契约自测
         run: node scripts/upstream-drift.test.mjs
+      # 自检矩阵 ratchet 护栏契约自测（秒级）：证明护栏对「新增 fail」敏感、不误报修复。
+      - name: 自检矩阵 ratchet 契约自测
+        run: node scripts/selftest-ratchet.test.mjs
       - run: npm run typecheck
       - run: npm run build
       # Same headless UI regression gate as main - see scripts/ui-gate.mjs.
@@ -60,4 +68,13 @@ jobs:
         with:
           name: ui-gate-report
           path: out/ui-gate-report.json
+          if-no-files-found: warn
+      # capture 模式下 ratchet 写出的基线（out/selftest-baseline.json），供人工落到
+      # scripts/ 激活护栏；ratchet 模式不产生此文件，warn 不阻断。
+      - name: 上传自检基线（capture 产物）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-baseline
+          path: out/selftest-baseline.json
           if-no-files-found: warn
