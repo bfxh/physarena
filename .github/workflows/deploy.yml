@@ -89,8 +89,55 @@ jobs:
   vxl-wasm-integrity:
     uses: ./.github/workflows/vxl-wasm-integrity.yml
 
+  # 预部署验收（**事前拦截**，非事后检测）：渲染器像素级 + 场景冒烟，对着**本地构建产物**跑，
+  # deploy 依赖本 job——渲染器/场景坏了在这里就拦住，坏站点永远不会上线。此前这两项放在
+  # gate-live（deploy 之后）只做事后检测，坏图已经上线才红。与 build 并行，不串行拖慢。
+  # 渲染器脚本跳过 unavailable 渲染器（如 SwiftShader 上的 WebGPU）；本地 dist 与线上同源
+  # 同构建、行为一致（线上版已实测通过），verify-live 再对账线上字节 == 提交字节兜底。
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # 起 vite preview（serve dist，base /physarena/ 于 4173）→ 等就绪 → 跑两项验收 →
+      # trap EXIT 兜底杀服务器。同一步内完成，避免后台进程跨 step 被回收。
+      - name: 预部署验收（渲染器 + 场景，对本地 dist）
+        env:
+          ARENA_URL: http://localhost:4173/physarena
+          ARENA_CHANNEL: chrome
+        run: |
+          set -e
+          nohup npm run preview >/tmp/preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill $PREVIEW_PID 2>/dev/null || true' EXIT
+          ok=""
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4173/physarena/ || true)
+            [ "$code" = "200" ] && { ok=1; break; }
+            sleep 1
+          done
+          [ -n "$ok" ] || { echo "preview failed to start"; cat /tmp/preview.log; exit 1; }
+          echo "preview up"
+          node scripts/verify-renderers.mjs --engines
+          node scripts/verify-scenarios.mjs
+      - name: 上传验收报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-prebuilt
+          path: |
+            out/verify-renderers.json
+            out/verify-scenarios.json
+          if-no-files-found: warn
+
   deploy:
-    needs: [build, vxl-wasm-integrity]
+    needs: [build, vxl-wasm-integrity, acceptance]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -217,29 +264,8 @@ jobs:
           UI_GATE_CHANNEL: chrome
           UI_GATE_URL: ${{ needs.deploy.outputs.page_url }}
         run: node scripts/ui-gate.mjs
-      # 渲染器像素级验收：10 个渲染器逐个落到「画布上到底有没有画面」（不是「有没有报错」）——
-      # ui-gate 只覆盖当前渲染器，这里覆盖全部，堵「某渲染器坏了静默上线」。脚本已跳过
-      # unavailable 渲染器（如 SwiftShader 上的 WebGPU）。打线上站复用现成 chrome。
-      - name: 渲染器像素级验收（对线上部署站）
-        env:
-          ARENA_URL: https://bfxh.github.io/physarena
-          ARENA_CHANNEL: chrome
-        run: node scripts/verify-renderers.mjs --engines
-      # 场景冒烟验收：全部场景可选中 / 建刚体 / 跑不 NaN，流体场景额外判定液体真的摊平。
-      - name: 场景冒烟验收（对线上部署站）
-        env:
-          ARENA_URL: https://bfxh.github.io/physarena
-          ARENA_CHANNEL: chrome
-        run: node scripts/verify-scenarios.mjs
-      - name: 上传验收报告
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: acceptance-live
-          path: |
-            out/verify-renderers.json
-            out/verify-scenarios.json
-          if-no-files-found: warn
+      # 注：渲染器/场景像素级 + 冒烟验收已移到并行 acceptance job（deploy 之前、事前拦截），
+      # 此处不再重复——线上字节由 verify-live 对账，acceptance 已验证的同源 dist 即线上内容。
       - name: 上传门禁报告
         if: always()
         uses: actions/upload-artifact@v4
