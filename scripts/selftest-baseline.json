@@ -1,0 +1,14 @@
+{
+  "fails": [
+    "rapier3d:shape-trimesh-sunk",
+    "jolt:shape-trimesh-sunk",
+    "physx5:shape-trimesh-sunk",
+    "bullet:shape-trimesh-sunk",
+    "havok:shape-trimesh-sunk",
+    "crashcat:shape-trimesh-sunk",
+    "cannon-es:shape-trimesh-sunk",
+    "cannon-es:shape-trimesh-hilly",
+    "oimo:shape-trimesh-sunk",
+    "oimo:shape-trimesh-hilly"
+  ]
+}
