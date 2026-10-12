@@ -62,6 +62,37 @@ jobs:
         env:
           UI_GATE_CHANNEL: chrome
         run: node scripts/ui-gate.mjs
+      # 渲染器 + 场景验收（预合并）：与 deploy.yml 的 acceptance job 同款，对本地 dist 跑，
+      # 让 PR/分支推送在合入前就抓渲染器/场景回归（deploy 的 acceptance 只覆盖 main 部署）。
+      # serve 必须用 localhost（vite preview 默认绑 localhost，127.0.0.1 连不上会假红）。
+      - name: 渲染器 + 场景验收（对本地 dist）
+        env:
+          ARENA_URL: http://localhost:4173/physarena
+          ARENA_CHANNEL: chrome
+        run: |
+          set -e
+          nohup npm run preview >/tmp/preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill $PREVIEW_PID 2>/dev/null || true' EXIT
+          ok=""
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4173/physarena/ || true)
+            [ "$code" = "200" ] && { ok=1; break; }
+            sleep 1
+          done
+          [ -n "$ok" ] || { echo "preview failed to start"; cat /tmp/preview.log; exit 1; }
+          echo "preview up"
+          node scripts/verify-renderers.mjs --engines
+          node scripts/verify-scenarios.mjs
+      - name: 上传验收报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-ci
+          path: |
+            out/verify-renderers.json
+            out/verify-scenarios.json
+          if-no-files-found: warn
       - name: 上传门禁报告
         if: always()
         uses: actions/upload-artifact@v4
