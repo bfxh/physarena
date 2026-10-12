@@ -9,12 +9,13 @@ import { chromium } from 'playwright-core';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const BASE = process.env.ARENA_URL ?? 'http://localhost:4173';
+const CHANNEL = process.env.ARENA_CHANNEL || 'msedge';
 const task = process.argv[2] ?? 'selftest';
 const OUT_TAG = process.env.ARENA_TAG ? `-${process.env.ARENA_TAG}` : '';
 
 mkdirSync('out', { recursive: true });
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ channel: CHANNEL, headless: true });
 const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
 
 const consoleErrors = [];

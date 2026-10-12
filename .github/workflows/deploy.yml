@@ -217,6 +217,29 @@ jobs:
           UI_GATE_CHANNEL: chrome
           UI_GATE_URL: ${{ needs.deploy.outputs.page_url }}
         run: node scripts/ui-gate.mjs
+      # 渲染器像素级验收：10 个渲染器逐个落到「画布上到底有没有画面」（不是「有没有报错」）——
+      # ui-gate 只覆盖当前渲染器，这里覆盖全部，堵「某渲染器坏了静默上线」。脚本已跳过
+      # unavailable 渲染器（如 SwiftShader 上的 WebGPU）。打线上站复用现成 chrome。
+      - name: 渲染器像素级验收（对线上部署站）
+        env:
+          ARENA_URL: https://bfxh.github.io/physarena
+          ARENA_CHANNEL: chrome
+        run: node scripts/verify-renderers.mjs --engines
+      # 场景冒烟验收：全部场景可选中 / 建刚体 / 跑不 NaN，流体场景额外判定液体真的摊平。
+      - name: 场景冒烟验收（对线上部署站）
+        env:
+          ARENA_URL: https://bfxh.github.io/physarena
+          ARENA_CHANNEL: chrome
+        run: node scripts/verify-scenarios.mjs
+      - name: 上传验收报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-live
+          path: |
+            out/verify-renderers.json
+            out/verify-scenarios.json
+          if-no-files-found: warn
       - name: 上传门禁报告
         if: always()
         uses: actions/upload-artifact@v4

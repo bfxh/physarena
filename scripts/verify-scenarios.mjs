@@ -16,6 +16,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const BASE = process.env.ARENA_URL ?? 'http://localhost:4173';
+// CI（ubuntu 无 msedge）传 ARENA_CHANNEL=chrome；本地默认仍走本机 msedge。
+const CHANNEL = process.env.ARENA_CHANNEL || 'msedge';
 const argv = process.argv.slice(2);
 const FLUID_ONLY = argv.includes('--fluid');
 const GROUP = readFlag('--group');
@@ -52,7 +54,7 @@ async function snapshot(page) {
 
 async function main() {
   mkdirSync('out', { recursive: true });
-  const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const browser = await chromium.launch({ channel: CHANNEL, headless: true });
   const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
   const problems = [];
   const http404 = [];
