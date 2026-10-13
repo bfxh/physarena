@@ -1,0 +1,49 @@
+# Dependency + supply-chain automation.
+#
+# Why this file exists: the workflows below pin every third-party GitHub Action
+# to a full commit SHA (see the `# vN` comments on each `uses:` line). SHA pinning
+# is the supply-chain best practice, but on its own it freezes actions at whatever
+# commit was current when they were pinned - so this config is what keeps the pins
+# moving. Dependabot is the other half of the "pin + auto-update" pattern.
+#
+# Coverage:
+#   - github-actions: bumps the SHA-pinned actions in .github/workflows/*.yml.
+#     Without this, the pins would rot. With it, a weekly PR refreshes them.
+#   - npm: complements the existing `npm audit --audit-level=high` gate by opening
+#     update PRs for runtime/build dependencies instead of only failing on advisories.
+#
+# Not covered: cargo. wasm-bridge/Cargo.toml only has local `path` dependencies on
+# the sibling BSHSQ repo (resolved via symlink in CI), so there are no crates.io
+# deps for Dependabot to track here.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    # Group all action bumps into a single PR to avoid one-PR-per-action noise.
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      npm-all:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "build"
+    labels:
+      - "dependencies"
+      - "npm"
