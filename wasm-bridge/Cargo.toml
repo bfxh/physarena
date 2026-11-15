@@ -2,7 +2,7 @@
 name = "vxl-phys-wasm"
 version = "0.1.0"
 edition = "2021"
-license = "Apache-2.0"
+license = "MIT"
 description = "BSHSQ-Solver ↔ PhysArena wasm 桥：批量 ABI（独立于引擎工作区；引擎侧保持零 unsafe）"
 
 # 独立工作区：本 crate 是物理引擎与 PhysArena 之间的**工具桥**，不并入引擎工作区
